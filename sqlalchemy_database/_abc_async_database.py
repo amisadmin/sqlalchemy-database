@@ -1,12 +1,11 @@
 import abc
+import asyncio
 import functools
-
 from typing import TypeVar, Callable
 
 try:
     from asyncio import to_thread  # python 3.9+
 except ImportError:
-    import asyncio
     import contextvars
     from typing_extensions import ParamSpec
 
