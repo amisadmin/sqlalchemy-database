@@ -1,0 +1,60 @@
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "sqlalchemy_database"
+authors = [
+    { name = "Atomi", email = "1456417373@qq.com" },
+]
+maintainers = [
+    { name = "Atomi", email = "1456417373@qq.com" },
+]
+description = "SQLAlchemy-Database provides shortcut functions to common database operations for SQLAlchemy ORM."
+readme = "README.md"
+requires-python = ">=3.6.1"
+dynamic = ["version"]
+keywords = [
+    "SQLAlchemy-Database",
+    "SQLAlchemy",
+    "Database",
+    "AsyncDatabase",
+    "FastAPI-Amis-Admin",
+]
+classifiers = [
+    "Framework :: FastAPI",
+    "Environment :: Web Environment",
+    "Topic :: System :: Systems Administration",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.6",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+]
+dependencies = [
+    "sqlalchemy",
+]
+
+[project.urls]
+Source = "https://github.com/amisadmin/sqlalchemy_database"
+FastAPI-Amis-Admin = "https://github.com/amisadmin/fastapi_amis_admin"
+
+[project.optional-dependencies]
+test = [
+    "pytest >=6.2.4,<7.0.0",
+    "aiosqlite",
+    "pytest-cov",
+    "pytest-asyncio>=0.17",
+    "httpx",
+]
+# pytest
+[tool.pytest.ini_options]
+minversion = "6.0"
+testpaths = [
+    "tests",
+]
+# pytest-asyncio
+asyncio_mode = "auto"
