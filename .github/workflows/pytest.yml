@@ -44,7 +44,8 @@ jobs:
         run: pytest --cov=./ --cov-report=xml
       - name: Upload coverage
         uses: codecov/codecov-action@v3
-
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }} # not required for public repos
 #      - name: Lint with flake8
 #        run: |
 #          # stop the build if there are Python syntax errors or undefined names
