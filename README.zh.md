@@ -11,11 +11,11 @@
     <a href="https://github.com/amisadmin/sqlalchemy_database/actions/workflows/pytest.yml" target="_blank">
         <img src="https://github.com/amisadmin/sqlalchemy_database/actions/workflows/pytest.yml/badge.svg" alt="Pytest">
     </a>
+    <a href="https://codecov.io/gh/amisadmin/sqlalchemy_database" > 
+        <img src="https://codecov.io/gh/amisadmin/sqlalchemy_database/branch/master/graph/badge.svg?token=SKOGAKIX4M" alt="codecov"/> 
+    </a>
     <a href="https://pypi.org/project/sqlalchemy_database" target="_blank">
         <img src="https://badgen.net/pypi/v/sqlalchemy_database?color=blue" alt="Package version">
-    </a>
-    <a href="https://pepy.tech/project/sqlalchemy_database" target="_blank">
-        <img src="https://pepy.tech/badge/sqlalchemy_database" alt="Downloads">
     </a>
     <a href="https://gitter.im/amisadmin/fastapi-amis-admin">
         <img src="https://badges.gitter.im/amisadmin/fastapi-amis-admin.svg" alt="Chat on Gitter"/>
