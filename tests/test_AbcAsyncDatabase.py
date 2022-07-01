@@ -94,3 +94,10 @@ async def test_async_run_sync(db, fake_users):
     await db.async_run_sync(delete_user, user, is_session=True)
     user = await db.async_get(User, 1)
     assert user is None
+
+    # test on_close_pre
+    def get_user(session: Session, user_id: int):
+        return session.get(User, user_id)
+
+    user_id = await db.async_run_sync(get_user, 2, is_session=True, on_close_pre=lambda r: r.id)
+    assert user_id == 2

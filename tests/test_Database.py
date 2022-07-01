@@ -101,3 +101,10 @@ def test_run_sync(fake_users):
     db.run_sync(delete_user, user, is_session=True)
     user = db.get(User, 1)
     assert user is None
+
+    # test on_close_pre
+    def get_user(session: Session, user_id: int):
+        return session.get(User, user_id)
+
+    user_id = db.run_sync(get_user, 2, is_session=True, on_close_pre=lambda r: r.id)
+    assert user_id == 2
