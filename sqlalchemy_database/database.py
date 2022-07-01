@@ -49,10 +49,10 @@ class AsyncDatabase(AbcAsyncDatabase):
     ) -> Union[Result, _T]:
         async with self.session_maker() as session:
             result = await session.execute(statement, params, execution_options, bind_arguments, **kw)
-            if commit:
-                await session.commit()
             if on_close_pre:
                 result = on_close_pre(result)
+            if commit:
+                await session.commit()
         return result
 
     async def scalar(
@@ -128,10 +128,10 @@ class AsyncDatabase(AbcAsyncDatabase):
         maker = self.session_maker if is_session else self.engine.connect
         async with maker() as conn:
             result = await conn.run_sync(fn, *args, **kwargs)
-            if commit:
-                await conn.commit()
             if on_close_pre:
                 result = on_close_pre(result)
+            if commit:
+                await conn.commit()
         return result
 
 
@@ -166,10 +166,10 @@ class Database(AbcAsyncDatabase):
     ) -> Union[Result, _T]:
         with self.session_maker() as session:
             result = session.execute(statement, params, execution_options, bind_arguments, **kw)
-            if commit:
-                session.commit()
             if on_close_pre:
                 result = on_close_pre(result)
+            if commit:
+                session.commit()
         return result
 
     def scalar(
@@ -246,8 +246,8 @@ class Database(AbcAsyncDatabase):
         maker = self.session_maker if is_session else self.engine.connect
         with maker() as conn:
             result = fn(conn, *args, **kwargs)
-            if commit:
-                conn.commit()
             if on_close_pre:
                 result = on_close_pre(result)
+            if commit:
+                conn.commit()
         return result
