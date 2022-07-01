@@ -16,9 +16,9 @@ def db(request) -> Union[Database, AsyncDatabase]:
 
 @pytest.fixture()
 async def prepare_database(db) -> AsyncGenerator[None, None]:
-    await db.async_run_sync(Base.metadata.create_all)
+    await db.async_run_sync(Base.metadata.create_all, is_session=False)
     yield
-    await db.async_run_sync(Base.metadata.drop_all)
+    await db.async_run_sync(Base.metadata.drop_all, is_session=False)
 
 
 @pytest.fixture
@@ -30,14 +30,14 @@ async def fake_users(db, prepare_database) -> List[dict]:
          "create_time": datetime.datetime.strptime(f"2022-01-0{i} 00:00:00", "%Y-%m-%d %H:%M:%S")
          } for i in range(1, 6)
     ]
-    await db.async_execute(insert(User).values(data), commit=True)
+    await db.async_execute(insert(User).values(data))
     return data
 
 
 async def test_async_execute(db, fake_users):
     # update
     stmt = update(User).where(User.id == 1).values({'username': 'new_user'})
-    result = await db.async_execute(stmt, commit=True)
+    result = await db.async_execute(stmt)
     assert result.rowcount == 1
     # select
     user = await db.async_execute(select(User).where(User.id == 1), on_close_pre=lambda r: r.scalar())
@@ -48,12 +48,18 @@ async def test_async_execute(db, fake_users):
         'username': 'User-6',
         'password': 'password_6'
     })
-    result = await db.async_execute(stmt, commit=True)
+    result = await db.async_execute(stmt)
     assert result.rowcount == 1
     # delete
     stmt = delete(User).where(User.id == 6)
-    result = await db.async_execute(stmt, commit=True)
+    result = await db.async_execute(stmt)
     assert result.rowcount == 1
+
+
+async def test_async_execute_connection(db, fake_users):
+    # Select
+    user = await db.async_execute(select(User).where(User.id == 1), is_session=False, on_close_pre=lambda r: r.one())
+    assert user.id == 1
 
 
 async def test_async_scalar(db, fake_users):
@@ -91,7 +97,7 @@ async def test_async_run_sync(db, fake_users):
 
     user = await db.async_get(User, 1)
     assert user.id == 1
-    await db.async_run_sync(delete_user, user, is_session=True)
+    await db.async_run_sync(delete_user, user)
     user = await db.async_get(User, 1)
     assert user is None
 
@@ -99,5 +105,5 @@ async def test_async_run_sync(db, fake_users):
     def get_user(session: Session, user_id: int):
         return session.get(User, user_id)
 
-    user_id = await db.async_run_sync(get_user, 2, is_session=True, on_close_pre=lambda r: r.id)
+    user_id = await db.async_run_sync(get_user, 2, on_close_pre=lambda r: r.id)
     assert user_id == 2

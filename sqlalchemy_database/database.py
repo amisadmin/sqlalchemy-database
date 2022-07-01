@@ -4,10 +4,9 @@ from sqlalchemy.engine import Result, Connection
 from sqlalchemy.ext.asyncio import AsyncSession, AsyncEngine, create_async_engine
 from sqlalchemy.future import Engine, create_engine
 from sqlalchemy.orm import sessionmaker, Session
-from sqlalchemy.sql import Executable
-from typing_extensions import Concatenate, ParamSpec
-
+from sqlalchemy.sql import Executable, Select
 from sqlalchemy_database._abc_async_database import AbcAsyncDatabase
+from typing_extensions import Concatenate, ParamSpec
 
 _P = ParamSpec("_P")
 _T = TypeVar("_T")
@@ -43,16 +42,23 @@ class AsyncDatabase(AbcAsyncDatabase):
             *,
             execution_options: Optional[_ExecuteOptions] = None,
             bind_arguments: Optional[Mapping[str, Any]] = None,
-            commit: bool = False,
+            commit: bool = True,
             on_close_pre: Callable[[Result], _T] = None,
+            is_session: bool = True,
             **kw: Any,
     ) -> Union[Result, _T]:
-        async with self.session_maker() as session:
-            result = await session.execute(statement, params, execution_options, bind_arguments, **kw)
+        if is_session:
+            maker = self.session_maker
+            kw['bind_arguments'] = bind_arguments
+        else:
+            maker = self.engine.connect
+        async with maker() as conn:
+
+            result = await conn.execute(statement, params, execution_options, **kw)
             if on_close_pre:
                 result = on_close_pre(result)
-            if commit:
-                await session.commit()
+            if commit and not isinstance(statement, Select):
+                await conn.commit()
         return result
 
     async def scalar(
@@ -122,9 +128,9 @@ class AsyncDatabase(AbcAsyncDatabase):
             *args: _P.args,
             commit: bool = True,
             on_close_pre: Callable[[_T], _R] = None,
-            is_session: bool = False,
+            is_session: bool = True,
             **kwargs: _P.kwargs
-    ) -> Union[_T,_R]:
+    ) -> Union[_T, _R]:
         maker = self.session_maker if is_session else self.engine.connect
         async with maker() as conn:
             result = await conn.run_sync(fn, *args, **kwargs)
@@ -160,16 +166,22 @@ class Database(AbcAsyncDatabase):
             *,
             execution_options: Optional[_ExecuteOptions] = None,
             bind_arguments: Optional[Mapping[str, Any]] = None,
-            commit: bool = False,
+            commit: bool = True,
             on_close_pre: Callable[[Result], _T] = None,
+            is_session: bool = True,
             **kw: Any,
     ) -> Union[Result, _T]:
-        with self.session_maker() as session:
-            result = session.execute(statement, params, execution_options, bind_arguments, **kw)
+        if is_session:
+            maker = self.session_maker
+            kw['bind_arguments'] = bind_arguments
+        else:
+            maker = self.engine.connect
+        with maker() as conn:
+            result = conn.execute(statement, params, execution_options, **kw)
             if on_close_pre:
                 result = on_close_pre(result)
-            if commit:
-                session.commit()
+            if commit and not isinstance(statement, Select):
+                conn.commit()
         return result
 
     def scalar(
@@ -240,7 +252,7 @@ class Database(AbcAsyncDatabase):
             *args: _P.args,
             commit: bool = True,
             on_close_pre: Callable[[_T], _R] = None,
-            is_session: bool = False,
+            is_session: bool = True,
             **kwargs: _P.kwargs
     ) -> Union[_T, _R]:
         maker = self.session_maker if is_session else self.engine.connect

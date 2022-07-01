@@ -94,7 +94,7 @@ from sqlalchemy import insert, select, update, delete
 async def fast_execute():
     # update
     stmt = update(User).where(User.id == 1).values({'username': 'new_user'})
-    result = await db.execute(stmt, commit=True)
+    result = await db.execute(stmt)
 
     # select
     stmt = select(User).where(User.id == 1)
@@ -102,11 +102,11 @@ async def fast_execute():
 
     # insert
     stmt = insert(User).values({'username': 'User-6', 'password': 'password-6'})
-    result = await db.execute(stmt, commit=True)
+    result = await db.execute(stmt)
 
     # delete
     stmt = delete(User).where(User.id == 6)
-    result = await db.execute(stmt, commit=True)
+    result = await db.execute(stmt)
 
     # scalar
     user = await db.scalar(select(User).where(User.id == 1))
@@ -123,7 +123,7 @@ async def fast_execute():
     await db.delete(user)
 
     # run_sync
-    await db.run_sync(Base.metadata.create_all)
+    await db.run_sync(Base.metadata.create_all, is_session=False)
 
     # session_maker
     async with db.session_maker() as session:
@@ -154,7 +154,7 @@ from sqlalchemy import insert, select, update, delete
 def fast_execute():
     # update
     stmt = update(User).where(User.id == 1).values({'username': 'new_user'})
-    result = db.execute(stmt, commit=True)
+    result = db.execute(stmt)
 
     # select
     stmt = select(User).where(User.id == 1)
@@ -162,11 +162,11 @@ def fast_execute():
 
     # insert
     stmt = insert(User).values({'username': 'User-6', 'password': 'password-6'})
-    result = db.execute(stmt, commit=True)
+    result = db.execute(stmt)
 
     # delete
     stmt = delete(User).where(User.id == 6)
-    result = db.execute(stmt, commit=True)
+    result = db.execute(stmt)
 
     # scalar
     user = db.scalar(select(User).where(User.id == 1))
@@ -183,7 +183,7 @@ def fast_execute():
     db.delete(user)
 
     # run_sync
-    db.run_sync(Base.metadata.create_all)
+    db.run_sync(Base.metadata.create_all, is_session=False)
 
     # session_maker
     with db.session_maker() as session:
@@ -212,7 +212,7 @@ from sqlalchemy_database import AsyncDatabase, Database
 async def fast_execute(db: Union[AsyncDatabase, Database]):
     # update
     stmt = update(User).where(User.id == 1).values({'username': 'new_user'})
-    result = await db.async_execute(stmt, commit=True)
+    result = await db.async_execute(stmt)
 
     # select
     stmt = select(User).where(User.id == 1)
@@ -220,11 +220,11 @@ async def fast_execute(db: Union[AsyncDatabase, Database]):
 
     # insert
     stmt = insert(User).values({'username': 'User-6', 'password': 'password-6'})
-    result = await db.async_execute(stmt, commit=True)
+    result = await db.async_execute(stmt)
 
     # delete
     stmt = delete(User).where(User.id == 6)
-    result = await db.async_execute(stmt, commit=True)
+    result = await db.async_execute(stmt)
 
     # scalar
     user = await db.async_scalar(select(User).where(User.id == 1))
@@ -241,7 +241,7 @@ async def fast_execute(db: Union[AsyncDatabase, Database]):
     await db.async_delete(user)
 
     # run_sync
-    await db.async_run_sync(Base.metadata.create_all)
+    await db.async_run_sync(Base.metadata.create_all, is_session=False)
 
 ```
 

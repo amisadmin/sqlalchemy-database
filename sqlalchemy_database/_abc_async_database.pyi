@@ -23,8 +23,9 @@ class AbcAsyncDatabase(metaclass=abc.ABCMeta):
             *,
             execution_options: Optional[_ExecuteOptions] = None,
             bind_arguments: Optional[Mapping[str, Any]] = None,
-            commit: bool = False,
+            commit: bool = True,
             on_close_pre: Callable[[Result], _T] = None,
+            is_session: bool = True,
             **kw: Any,
     ) -> Union[Result, _T]: ...
 
@@ -67,6 +68,6 @@ class AbcAsyncDatabase(metaclass=abc.ABCMeta):
             *args: _P.args,
             commit: bool = True,
             on_close_pre: Callable[[_T], _R] = None,
-            is_session: bool = False,
+            is_session: bool = True,
             **kwargs: _P.kwargs
     ) -> Union[_T,_R]: ...

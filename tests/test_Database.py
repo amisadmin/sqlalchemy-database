@@ -11,9 +11,9 @@ from tests.conftest import sync_db as db, Base, User
 
 @pytest.fixture
 def prepare_database() -> Generator[None, None, None]:
-    db.run_sync(Base.metadata.create_all)
+    db.run_sync(Base.metadata.create_all, is_session=False)
     yield
-    db.run_sync(Base.metadata.drop_all)
+    db.run_sync(Base.metadata.drop_all, is_session=False)
 
 
 @pytest.fixture
@@ -61,6 +61,12 @@ def test_execute(fake_users):
     stmt = delete(User).where(User.id == 6)
     result = db.execute(stmt, commit=True)
     assert result.rowcount == 1
+
+
+def test_execute_connection(fake_users):
+    # Select
+    user = db.execute(select(User).where(User.id == 1), is_session=False, on_close_pre=lambda r: r.one())
+    assert user.id == 1
 
 
 def test_scalar(fake_users):
