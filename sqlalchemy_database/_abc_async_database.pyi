@@ -8,6 +8,7 @@ from typing_extensions import ParamSpec, Concatenate
 
 _P = ParamSpec("_P")
 _T = TypeVar("_T")
+_R = TypeVar("_R")
 
 _ExecuteParams = Union[Mapping[Any, Any], Sequence[Mapping[Any, Any]]]
 _ExecuteOptions = Mapping[Any, Any]
@@ -19,6 +20,7 @@ class AbcAsyncDatabase(metaclass=abc.ABCMeta):
             self,
             statement: Executable,
             params: Optional[_ExecuteParams] = None,
+            *,
             execution_options: Optional[_ExecuteOptions] = None,
             bind_arguments: Optional[Mapping[str, Any]] = None,
             commit: bool = False,
@@ -30,6 +32,7 @@ class AbcAsyncDatabase(metaclass=abc.ABCMeta):
             self,
             statement: Executable,
             params: Optional[_ExecuteParams] = None,
+            *,
             execution_options: Optional[_ExecuteOptions] = None,
             bind_arguments: Optional[Mapping[str, Any]] = None,
             **kw: Any,
@@ -39,6 +42,7 @@ class AbcAsyncDatabase(metaclass=abc.ABCMeta):
             self,
             statement: Executable,
             params: Optional[_ExecuteParams] = None,
+            *,
             execution_options: Optional[_ExecuteOptions] = None,
             **kw: Any,
     ) -> List[Any]: ...
@@ -47,6 +51,7 @@ class AbcAsyncDatabase(metaclass=abc.ABCMeta):
             self,
             entity: Type[_T],
             ident: Any,
+            *,
             options: Optional[Sequence[Any]] = None,
             populate_existing: bool = False,
             with_for_update: Optional[Any] = None,
@@ -60,6 +65,8 @@ class AbcAsyncDatabase(metaclass=abc.ABCMeta):
             self,
             fn: Callable[[Concatenate[Union[Session, Connection], _P]], _T],
             *args: _P.args,
+            commit: bool = True,
+            on_close_pre: Callable[[_T], _R] = None,
             is_session: bool = False,
             **kwargs: _P.kwargs
-    ) -> _T: ...
+    ) -> Union[_T,_R]: ...

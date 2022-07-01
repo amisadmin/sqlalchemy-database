@@ -9,8 +9,10 @@ from typing_extensions import Concatenate, ParamSpec
 
 from sqlalchemy_database._abc_async_database import AbcAsyncDatabase
 
-_T = TypeVar("_T")
 _P = ParamSpec("_P")
+_T = TypeVar("_T")
+_R = TypeVar("_R")
+
 _ExecuteParams = Union[Mapping[Any, Any], Sequence[Mapping[Any, Any]]]
 _ExecuteOptions = Mapping[Any, Any]
 
@@ -38,6 +40,7 @@ class AsyncDatabase(AbcAsyncDatabase):
             self,
             statement: Executable,
             params: Optional[_ExecuteParams] = None,
+            *,
             execution_options: Optional[_ExecuteOptions] = None,
             bind_arguments: Optional[Mapping[str, Any]] = None,
             commit: bool = False,
@@ -56,6 +59,7 @@ class AsyncDatabase(AbcAsyncDatabase):
             self,
             statement: Executable,
             params: Optional[_ExecuteParams] = None,
+            *,
             execution_options: Optional[_ExecuteOptions] = None,
             bind_arguments: Optional[Mapping[str, Any]] = None,
             **kw: Any,
@@ -73,6 +77,7 @@ class AsyncDatabase(AbcAsyncDatabase):
             self,
             statement: Executable,
             params: Optional[_ExecuteParams] = None,
+            *,
             execution_options: Optional[_ExecuteOptions] = None,
             **kw: Any,
     ) -> List[Any]:
@@ -89,6 +94,7 @@ class AsyncDatabase(AbcAsyncDatabase):
             self,
             entity: Type[_T],
             ident: Any,
+            *,
             options: Optional[Sequence[Any]] = None,
             populate_existing: bool = False,
             with_for_update: Optional[Any] = None,
@@ -114,15 +120,19 @@ class AsyncDatabase(AbcAsyncDatabase):
             self,
             fn: Callable[[Concatenate[Union[Session, Connection], _P]], _T],
             *args: _P.args,
+            commit: bool = True,
+            on_close_pre: Callable[[_T], _R] = None,
             is_session: bool = False,
             **kwargs: _P.kwargs
-    ) -> _T:
-        if is_session:
-            async with self.session_maker() as session:
-                async with session.begin():
-                    return await session.run_sync(fn, *args, **kwargs)
-        async with self.engine.begin() as conn:
-            return await conn.run_sync(fn, *args, **kwargs)
+    ) -> Union[_T,_R]:
+        maker = self.session_maker if is_session else self.engine.connect
+        async with maker() as conn:
+            result = await conn.run_sync(fn, *args, **kwargs)
+            if commit:
+                await conn.commit()
+            if on_close_pre:
+                result = on_close_pre(result)
+        return result
 
 
 class Database(AbcAsyncDatabase):
@@ -147,6 +157,7 @@ class Database(AbcAsyncDatabase):
             self,
             statement: Executable,
             params: Optional[_ExecuteParams] = None,
+            *,
             execution_options: Optional[_ExecuteOptions] = None,
             bind_arguments: Optional[Mapping[str, Any]] = None,
             commit: bool = False,
@@ -165,6 +176,7 @@ class Database(AbcAsyncDatabase):
             self,
             statement: Executable,
             params: Optional[_ExecuteParams] = None,
+            *,
             execution_options: Optional[_ExecuteOptions] = None,
             bind_arguments: Optional[Mapping[str, Any]] = None,
             **kw: Any,
@@ -182,6 +194,7 @@ class Database(AbcAsyncDatabase):
             self,
             statement: Executable,
             params: Optional[_ExecuteParams] = None,
+            *,
             execution_options: Optional[_ExecuteOptions] = None,
             bind_arguments: Optional[Mapping[str, Any]] = None,
             **kw: Any,
@@ -199,6 +212,7 @@ class Database(AbcAsyncDatabase):
             self,
             entity: Type[_T],
             ident: Any,
+            *,
             options: Optional[Sequence[Any]] = None,
             populate_existing: bool = False,
             with_for_update: Optional[Any] = None,
@@ -224,12 +238,16 @@ class Database(AbcAsyncDatabase):
             self,
             fn: Callable[[Concatenate[Union[Session, Connection], _P]], _T],
             *args: _P.args,
+            commit: bool = True,
+            on_close_pre: Callable[[_T], _R] = None,
             is_session: bool = False,
             **kwargs: _P.kwargs
-    ) -> _T:
-        if is_session:
-            with self.session_maker() as session:
-                with session.begin():
-                    return fn(session, *args, **kwargs)
-        with self.engine.begin() as conn:
-            return fn(conn, *args, **kwargs)
+    ) -> Union[_T, _R]:
+        maker = self.session_maker if is_session else self.engine.connect
+        with maker() as conn:
+            result = fn(conn, *args, **kwargs)
+            if commit:
+                conn.commit()
+            if on_close_pre:
+                result = on_close_pre(result)
+        return result
