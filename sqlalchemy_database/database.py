@@ -5,8 +5,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, AsyncEngine, create_async_engin
 from sqlalchemy.future import Engine, create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.sql import Executable, Select
-from sqlalchemy_database._abc_async_database import AbcAsyncDatabase
 from typing_extensions import Concatenate, ParamSpec
+
+from sqlalchemy_database._abc_async_database import AbcAsyncDatabase
 
 _P = ParamSpec("_P")
 _T = TypeVar("_T")
@@ -53,8 +54,7 @@ class AsyncDatabase(AbcAsyncDatabase):
         else:
             maker = self.engine.connect
         async with maker() as conn:
-
-            result = await conn.execute(statement, params, execution_options, **kw)
+            result = await conn.execute(statement, params, execution_options, **kw)  # type:ignore
             if on_close_pre:
                 result = on_close_pre(result)
             if commit and not isinstance(statement, Select):
@@ -121,6 +121,11 @@ class AsyncDatabase(AbcAsyncDatabase):
         async with self.session_maker() as session:
             async with session.begin():
                 await session.delete(instance)
+
+    async def save(self, *instances: Any) -> None:
+        async with self.session_maker() as session:
+            async with session.begin():
+                session.add_all(instances)
 
     async def run_sync(
             self,
@@ -245,6 +250,11 @@ class Database(AbcAsyncDatabase):
         with self.session_maker() as session:
             with session.begin():
                 session.delete(instance)
+
+    def save(self, *instances: Any) -> None:
+        with self.session_maker() as session:
+            with session.begin():
+                session.add_all(instances)
 
     def run_sync(
             self,

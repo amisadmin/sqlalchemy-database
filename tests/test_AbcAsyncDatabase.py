@@ -91,6 +91,21 @@ async def test_async_delete(db, fake_users):
     assert user is None
 
 
+async def test_async_save(db, fake_users):
+    # test update
+    user = await db.async_get(User, 1)
+    assert user.id == 1
+    user.username = 'new_user'
+    await db.async_save(user)
+    user = await db.async_get(User, 1)
+    assert user.username == 'new_user'
+    # test insert
+    user2 = User(username='new_user2')
+    await db.async_save(user2)
+    u = await db.async_scalar(select(User).where(User.username == 'new_user2'))
+    assert u.username == 'new_user2'
+
+
 async def test_async_run_sync(db, fake_users):
     def delete_user(session: Session, instance: User):
         session.delete(instance)

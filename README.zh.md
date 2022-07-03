@@ -122,6 +122,10 @@ async def fast_execute():
     user = User(id=1, name='test')
     await db.delete(user)
 
+    # save(insert or update)
+    user = User(name='new_user')
+    await db.save(user)
+    
     # run_sync
     await db.run_sync(Base.metadata.create_all, is_session=False)
 
@@ -182,6 +186,10 @@ def fast_execute():
     user = User(id=1, name='test')
     db.delete(user)
 
+    # save(insert or update)
+    user = User(name='new_user')
+    db.save(user)
+    
     # run_sync
     db.run_sync(Base.metadata.create_all, is_session=False)
 
@@ -239,7 +247,11 @@ async def fast_execute(db: Union[AsyncDatabase, Database]):
     # delete
     user = User(id=1, name='test')
     await db.async_delete(user)
-
+    
+    # save(insert or update)
+    user = User(name='new_user')
+    await db.async_save(user)
+    
     # run_sync
     await db.async_run_sync(Base.metadata.create_all, is_session=False)
 

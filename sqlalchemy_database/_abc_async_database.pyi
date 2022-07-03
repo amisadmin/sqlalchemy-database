@@ -62,6 +62,8 @@ class AbcAsyncDatabase(metaclass=abc.ABCMeta):
 
     async def async_delete(self, instance: Any) -> None: ...
 
+    async def async_save(self, *instances: Any) -> None: ...
+
     async def async_run_sync(
             self,
             fn: Callable[[Concatenate[Union[Session, Connection], _P]], _T],
@@ -70,4 +72,4 @@ class AbcAsyncDatabase(metaclass=abc.ABCMeta):
             on_close_pre: Callable[[_T], _R] = None,
             is_session: bool = True,
             **kwargs: _P.kwargs
-    ) -> Union[_T,_R]: ...
+    ) -> Union[_T, _R]: ...

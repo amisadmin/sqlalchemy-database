@@ -98,6 +98,21 @@ def test_delete(fake_users):
     assert user is None
 
 
+def test_save(fake_users):
+    # test update
+    user = db.get(User, 1)
+    assert user.id == 1
+    user.username = 'new_user'
+    db.save(user)
+    user = db.get(User, 1)
+    assert user.username == 'new_user'
+    # test insert
+    user2 = User(username='new_user2')
+    db.save(user2)
+    u = db.scalar(select(User).where(User.username == 'new_user2'))
+    assert u.username == 'new_user2'
+
+
 def test_run_sync(fake_users):
     def delete_user(session: Session, instance: User):
         session.delete(instance)
