@@ -15,6 +15,9 @@ _ExecuteOptions = Mapping[Any, Any]
 
 
 class AbcAsyncDatabase(metaclass=abc.ABCMeta):
+    """`sqlalchemy` asynchronous database abstract base class, not directly instantiated
+
+    """
 
     async def async_execute(
             self,
@@ -62,7 +65,7 @@ class AbcAsyncDatabase(metaclass=abc.ABCMeta):
 
     async def async_delete(self, instance: Any) -> None: ...
 
-    async def async_save(self, *instances: Any) -> None: ...
+    async def async_save(self, *instances: Any, refresh: bool = False) -> None: ...
 
     async def async_run_sync(
             self,
