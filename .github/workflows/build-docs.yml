@@ -1,0 +1,31 @@
+name: Build Docs
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+    paths:
+      - 'docs/zh/**'
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v3
+        with:
+          python-version: 3.8
+      - uses: actions/cache@v3
+        id: cache
+        with:
+          path: ${{ env.pythonLocation }}
+          key: ${{ runner.os }}-python-${{ env.pythonLocation }}-${{ hashFiles('pyproject.toml') }}-docs
+
+      - run: pip install mkdocs-material
+      - run: pip install mkdocstrings
+
+      - name: Build Docs
+        run: |
+          cd ./docs/zh
+          mkdocs gh-deploy --force
+

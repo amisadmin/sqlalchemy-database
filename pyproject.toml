@@ -50,6 +50,10 @@ test = [
     "pytest-asyncio>=0.17",
     "httpx",
 ]
+docs = [
+    "mkdocs-material>=8.3.8",
+    "mkdocstrings>=0.19.0",
+]
 # pytest
 [tool.pytest.ini_options]
 minversion = "6.0"
