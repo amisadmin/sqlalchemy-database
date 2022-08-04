@@ -271,6 +271,8 @@ class AsyncDatabase(AbcAsyncDatabase):
         async with self.session_maker() as session:
             async with session.begin():
                 session.add_all(instances)
+            if refresh:
+                [await session.refresh(instance) for instance in instances]
 
     async def run_sync(
             self,
@@ -435,6 +437,8 @@ class Database(AbcAsyncDatabase):
         with self.session_maker() as session:
             with session.begin():
                 session.add_all(instances)
+            if refresh:
+                [session.refresh(instance) for instance in instances]
 
     def run_sync(
             self,

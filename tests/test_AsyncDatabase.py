@@ -111,7 +111,10 @@ async def test_save(fake_users):
     await db.save(user2)
     u = await db.scalar(select(User).where(User.username == 'new_user2'))
     assert u.username == 'new_user2'
-
+    # test refresh
+    user3 = User(username='new_user3')
+    await db.save(user3, refresh=True)
+    assert user3.id
 
 async def test_run_sync(fake_users):
     def delete_user(session: Session, instance: User):

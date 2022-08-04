@@ -4,7 +4,6 @@ from typing import AsyncGenerator, List, Union
 import pytest
 from sqlalchemy import insert, select, update, delete
 from sqlalchemy.orm import Session
-
 from sqlalchemy_database import AsyncDatabase, Database
 from tests.conftest import async_db, sync_db, Base, User
 
@@ -104,6 +103,10 @@ async def test_async_save(db, fake_users):
     await db.async_save(user2)
     u = await db.async_scalar(select(User).where(User.username == 'new_user2'))
     assert u.username == 'new_user2'
+    # test refresh
+    user3 = User(username='new_user3')
+    await db.async_save(user3, refresh=True)
+    assert user3.id
 
 
 async def test_async_run_sync(db, fake_users):
