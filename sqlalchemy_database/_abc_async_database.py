@@ -12,15 +12,13 @@ except ImportError:
     _P = ParamSpec("_P")
     _R = TypeVar("_R")
 
-
     async def to_thread(func: Callable[_P, _R], *args: _P.args, **kwargs: _P.kwargs) -> _R:  # noqa: E303
         loop = asyncio.get_running_loop()
         ctx = contextvars.copy_context()
         func_call = functools.partial(ctx.run, func, *args, **kwargs)
         return await loop.run_in_executor(None, func_call)
 
-
-class AbcAsyncDatabase(metaclass=abc.ABCMeta):
+class AbcAsyncDatabase(metaclass = abc.ABCMeta):
 
     def __init__(self) -> None:
         for func_name in ['execute', 'scalar', 'scalars_all', 'get', 'delete', 'save', 'run_sync']:

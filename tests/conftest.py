@@ -26,10 +26,18 @@ async_db = AsyncDatabase.create('sqlite+aiosqlite:///amisadmin.db?check_same_thr
 
 Base = declarative_base()
 
-
 class User(Base):
     __tablename__ = "User"
-    id = sa.Column(sa.Integer, primary_key=True)
-    username = sa.Column(sa.String(30), unique=True, index=True, nullable=False)
-    password = sa.Column(sa.String(30), default='')
-    create_time = sa.Column(sa.DateTime, default=datetime.datetime.utcnow)
+    id = sa.Column(sa.Integer, primary_key = True)
+    username = sa.Column(sa.String(30), unique = True, index = True, nullable = False)
+    password = sa.Column(sa.String(30), default = '')
+    create_time = sa.Column(sa.DateTime, default = datetime.datetime.utcnow)
+    group_id = sa.Column(sa.Integer, sa.ForeignKey('Group.id'))
+    group = sa.orm.relationship('Group', back_populates = 'users')
+
+class Group(Base):
+    __tablename__ = "Group"
+    id = sa.Column(sa.Integer, primary_key = True)
+    name = sa.Column(sa.String(30), unique = True, index = True, nullable = False)
+    create_time = sa.Column(sa.DateTime, default = datetime.datetime.utcnow)
+    users = sa.orm.relationship("User", back_populates = "group", lazy = "dynamic")

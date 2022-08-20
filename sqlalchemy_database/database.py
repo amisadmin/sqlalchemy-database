@@ -1,7 +1,7 @@
 from typing import Generator, Any, AsyncGenerator, Optional, Mapping, Union, Sequence, Type, List, Callable, TypeVar
 
 from sqlalchemy.engine import Result, Connection
-from sqlalchemy.ext.asyncio import AsyncSession, AsyncEngine, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, AsyncEngine, create_async_engine, AsyncConnection
 from sqlalchemy.future import Engine, create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.sql import Executable, Select
@@ -15,7 +15,6 @@ _R = TypeVar("_R")
 
 _ExecuteParams = Union[Mapping[Any, Any], Sequence[Mapping[Any, Any]]]
 _ExecuteOptions = Mapping[Any, Any]
-
 
 class AsyncDatabase(AbcAsyncDatabase):
     """`sqlalchemy` asynchronous database client
@@ -81,16 +80,17 @@ class AsyncDatabase(AbcAsyncDatabase):
             yield session
 
     async def execute(
-            self,
-            statement: Executable,
-            params: Optional[_ExecuteParams] = None,
-            *,
-            execution_options: Optional[_ExecuteOptions] = None,
-            bind_arguments: Optional[Mapping[str, Any]] = None,
-            commit: bool = True,
-            on_close_pre: Callable[[Result], _T] = None,
-            is_session: bool = True,
-            **kw: Any,
+        self,
+        statement: Executable,
+        params: Optional[_ExecuteParams] = None,
+        *,
+        execution_options: Optional[_ExecuteOptions] = None,
+        bind_arguments: Optional[Mapping[str, Any]] = None,
+        commit: bool = True,
+        on_close_pre: Callable[[Result], _T] = None,
+        is_session: bool = True,
+        executor: Union[AsyncSession, AsyncConnection, None] = None,
+        **kw: Any,
     ) -> Union[Result, _T]:
         """
         Execute SQL expressions. Automatically create a connection and execute `AsyncSession.execute` or `AsyncConnection.execute`
@@ -114,6 +114,7 @@ class AsyncDatabase(AbcAsyncDatabase):
             on_close_pre: Close the previous hook function.
             is_session: Session or not. If true, an `AsyncSession` is created.
                 If false, an `AsyncConnection` is created. The default is true.
+            executor: The executor of the statement. If not specified, an `AsyncSession` or `AsyncConnection` is created.
             **kw: Deprecated; use the bind_arguments dictionary
 
         Returns:
@@ -134,27 +135,32 @@ class AsyncDatabase(AbcAsyncDatabase):
             example: The `Result.all`,`Result.scalar`,`Result.scalars`methods cannot be called again after the connection is closed.
 
         """
-        if is_session:
-            maker = self.session_maker
-            kw['bind_arguments'] = bind_arguments
-        else:
-            maker = self.engine.connect
-        async with maker() as conn:
-            result = await conn.execute(statement, params, execution_options, **kw)  # type:ignore
-            if on_close_pre:
-                result = on_close_pre(result)
-            if commit and not isinstance(statement, Select):
-                await conn.commit()
+        need_close = False
+        if executor is None or not isinstance(executor, (AsyncSession, AsyncConnection)):
+            need_close = True
+            if is_session:
+                executor = self.session_maker()
+                kw['bind_arguments'] = bind_arguments
+            else:
+                executor = await self.engine.connect()
+        result = await executor.execute(statement, params, execution_options, **kw)  # type:ignore
+        if on_close_pre:
+            result = on_close_pre(result)
+        if commit and not isinstance(statement, Select):
+            await executor.commit()
+        if need_close:
+            await executor.close()
         return result
 
     async def scalar(
-            self,
-            statement: Executable,
-            params: Optional[_ExecuteParams] = None,
-            *,
-            execution_options: Optional[_ExecuteOptions] = None,
-            bind_arguments: Optional[Mapping[str, Any]] = None,
-            **kw: Any,
+        self,
+        statement: Executable,
+        params: Optional[_ExecuteParams] = None,
+        *,
+        execution_options: Optional[_ExecuteOptions] = None,
+        bind_arguments: Optional[Mapping[str, Any]] = None,
+        session: Optional[AsyncSession] = None,
+        **kw: Any,
     ) -> Any:
         """
         Execute a statement and return a scalar result.
@@ -162,22 +168,29 @@ class AsyncDatabase(AbcAsyncDatabase):
         Usage and parameters are the same as that of :meth:`_orm.Session.execute`;
         the return result is a scalar Python value.
         """
-        async with self.session_maker() as session:
-            return await session.scalar(
-                statement,
-                params,
-                execution_options=execution_options,
-                bind_arguments=bind_arguments,
-                **kw,
-            )
+        if session is None or not isinstance(session, AsyncSession):
+            executor = self.session_maker()
+        else:
+            executor = session
+        result = await executor.scalar(
+            statement,
+            params,
+            execution_options = execution_options,
+            bind_arguments = bind_arguments,
+            **kw,
+        )
+        if session is None:
+            await executor.close()
+        return result
 
     async def scalars_all(
-            self,
-            statement: Executable,
-            params: Optional[_ExecuteParams] = None,
-            *,
-            execution_options: Optional[_ExecuteOptions] = None,
-            **kw: Any,
+        self,
+        statement: Executable,
+        params: Optional[_ExecuteParams] = None,
+        *,
+        execution_options: Optional[_ExecuteOptions] = None,
+        session: Optional[AsyncSession] = None,
+        **kw: Any,
     ) -> List[Any]:
         """
         Execute a statement and return the results as scalar list.
@@ -185,25 +198,31 @@ class AsyncDatabase(AbcAsyncDatabase):
         Usage and parameters are the same as that of :meth:`_orm.Session.execute`;
         the return result is a list of scalar Python value.
         """
-        async with self.session_maker() as session:
-            result = await session.scalars(
-                statement,
-                params,
-                execution_options=execution_options,
-                **kw,
-            )
-            return result.all()
+        if session is None or not isinstance(session, AsyncSession):
+            executor = self.session_maker()
+        else:
+            executor = session
+        result = (await executor.scalars(
+            statement,
+            params,
+            execution_options = execution_options,
+            **kw,
+        )).all()
+        if session is None:
+            await executor.close()
+        return result
 
     async def get(
-            self,
-            entity: Type[_T],
-            ident: Any,
-            *,
-            options: Optional[Sequence[Any]] = None,
-            populate_existing: bool = False,
-            with_for_update: Optional[Any] = None,
-            identity_token: Optional[Any] = None,
-            execution_options: Optional[_ExecuteOptions] = None,
+        self,
+        entity: Type[_T],
+        ident: Any,
+        *,
+        options: Optional[Sequence[Any]] = None,
+        populate_existing: bool = False,
+        with_for_update: Optional[Any] = None,
+        identity_token: Optional[Any] = None,
+        execution_options: Optional[_ExecuteOptions] = None,
+        session: Optional[AsyncSession] = None,
     ) -> Optional[_T]:
         """
         Return an instance based on the given primary key identifier, or `None` if not found.
@@ -227,7 +246,7 @@ class AsyncDatabase(AbcAsyncDatabase):
                 This dictionary can provide a subset of the options that are
                 accepted by :meth:`_engine.Connection.execution_options`, and may
                 also provide additional options understood only in an ORM context.
-
+            session: If not specified, an `AsyncSession` is created.
         Returns:
             The object instance, or ``None``.
 
@@ -245,15 +264,21 @@ class AsyncDatabase(AbcAsyncDatabase):
             )
             ```
         """
-        async with self.session_maker() as session:
-            return await session.get(
-                entity,
-                ident,
-                options=options,
-                populate_existing=populate_existing,
-                with_for_update=with_for_update,
-                identity_token=identity_token,
-            )
+        if session is None or not isinstance(session, AsyncSession):
+            executor = self.session_maker()
+        else:
+            executor = session
+        result = await executor.get(
+            entity,
+            ident,
+            options = options,
+            populate_existing = populate_existing,
+            with_for_update = with_for_update,
+            identity_token = identity_token,
+        )
+        if session is None:
+            await executor.close()
+        return result
 
     async def delete(self, instance: Any) -> None:
         """Deletes an instance object."""
@@ -261,27 +286,39 @@ class AsyncDatabase(AbcAsyncDatabase):
             async with session.begin():
                 await session.delete(instance)
 
-    async def save(self, *instances: Any, refresh: bool = False) -> None:
+    async def save(
+        self,
+        *instances: Any,
+        refresh: bool = False,
+        session: Optional[AsyncSession] = None
+    ) -> None:
         """
         Save the given collection of instances.
-        Args:
             *instances: A sequence of instance objects.
             refresh: Expire and refresh attributes on the given collection of instances.
+                    Args:
+            session: If not specified, an `AsyncSession` is created.
         """
-        async with self.session_maker() as session:
-            async with session.begin():
-                session.add_all(instances)
-            if refresh:
-                [await session.refresh(instance) for instance in instances]
+        if session is None or not isinstance(session, AsyncSession):
+            executor = self.session_maker()
+        else:
+            executor = session
+        executor.add_all(instances)
+        await executor.commit()
+        if refresh:
+            [await executor.refresh(instance) for instance in instances]
+        if session is None:
+            await executor.close()
 
     async def run_sync(
-            self,
-            fn: Callable[[Concatenate[Union[Session, Connection], _P]], _T],
-            *args: _P.args,
-            commit: bool = True,
-            on_close_pre: Callable[[_T], _R] = None,
-            is_session: bool = True,
-            **kwargs: _P.kwargs
+        self,
+        fn: Callable[[Concatenate[Union[Session, Connection], _P]], _T],
+        *args: _P.args,
+        commit: bool = True,
+        on_close_pre: Callable[[_T], _R] = None,
+        is_session: bool = True,
+        executor: Union[AsyncSession, AsyncConnection, None] = None,
+        **kwargs: _P.kwargs
     ) -> Union[_T, _R]:
         """
         Invoke the given sync callable passing sync self as the first
@@ -298,6 +335,7 @@ class AsyncDatabase(AbcAsyncDatabase):
             on_close_pre: Close the previous hook function.
             is_session: Session or not. If true, an `AsyncSession` is created.
                 If false, an `AsyncConnection` is created. The default is true.
+            executor: The executor of the statement. If not specified, an `AsyncSession` or `AsyncConnection` is created.
             **kwargs: Synchronization function keyword argument
 
         Returns: 返回同步函数fn执行结果.如果`on_close_pre`不为空,则返回`on_close_pre`二次处理结果.
@@ -315,15 +353,18 @@ class AsyncDatabase(AbcAsyncDatabase):
             callable should only call into SQLAlchemy's asyncio database
             APIs which will be properly adapted to the greenlet context.
         """
-        maker = self.session_maker if is_session else self.engine.connect
-        async with maker() as conn:
-            result = await conn.run_sync(fn, *args, **kwargs)
-            if on_close_pre:
-                result = on_close_pre(result)
-            if commit:
-                await conn.commit()
+        need_close = False
+        if executor is None or not isinstance(executor, (AsyncSession, AsyncConnection)):
+            need_close = True
+            executor = self.session_maker() if is_session else await self.engine.connect()
+        result = await executor.run_sync(fn, *args, **kwargs)
+        if on_close_pre:
+            result = on_close_pre(result)
+        if commit:
+            await executor.commit()
+        if need_close:
+            await executor.close()
         return result
-
 
 class Database(AbcAsyncDatabase):
     """`sqlalchemy` synchronous database client
@@ -347,113 +388,154 @@ class Database(AbcAsyncDatabase):
             yield session
 
     def execute(
-            self,
-            statement: Executable,
-            params: Optional[_ExecuteParams] = None,
-            *,
-            execution_options: Optional[_ExecuteOptions] = None,
-            bind_arguments: Optional[Mapping[str, Any]] = None,
-            commit: bool = True,
-            on_close_pre: Callable[[Result], _T] = None,
-            is_session: bool = True,
-            **kw: Any,
+        self,
+        statement: Executable,
+        params: Optional[_ExecuteParams] = None,
+        *,
+        execution_options: Optional[_ExecuteOptions] = None,
+        bind_arguments: Optional[Mapping[str, Any]] = None,
+        commit: bool = True,
+        on_close_pre: Callable[[Result], _T] = None,
+        is_session: bool = True,
+        executor: Union[Session, Connection, None] = None,
+        **kw: Any,
     ) -> Union[Result, _T]:
-        if is_session:
-            maker = self.session_maker
-            kw['bind_arguments'] = bind_arguments
-        else:
-            maker = self.engine.connect
-        with maker() as conn:
-            result = conn.execute(statement, params, execution_options, **kw)
-            if on_close_pre:
-                result = on_close_pre(result)
-            if commit and not isinstance(statement, Select):
-                conn.commit()
+        need_close = False
+        if executor is None or not isinstance(executor, (Session, Connection)):
+            need_close = True
+            if is_session:
+                executor = self.session_maker()
+                kw['bind_arguments'] = bind_arguments
+            else:
+                executor = self.engine.connect()
+        result = executor.execute(statement, params, execution_options, **kw)
+        if on_close_pre:
+            result = on_close_pre(result)
+        if commit and not isinstance(statement, Select):
+            executor.commit()
+        if need_close:
+            executor.close()
         return result
 
     def scalar(
-            self,
-            statement: Executable,
-            params: Optional[_ExecuteParams] = None,
-            *,
-            execution_options: Optional[_ExecuteOptions] = None,
-            bind_arguments: Optional[Mapping[str, Any]] = None,
-            **kw: Any,
+        self,
+        statement: Executable,
+        params: Optional[_ExecuteParams] = None,
+        *,
+        execution_options: Optional[_ExecuteOptions] = None,
+        bind_arguments: Optional[Mapping[str, Any]] = None,
+        session: Optional[Session] = None,
+        **kw: Any,
     ) -> Any:
-        with self.session_maker() as session:
-            return session.scalar(
-                statement,
-                params,
-                execution_options=execution_options,
-                bind_arguments=bind_arguments,
-                **kw,
-            )
+        if session is None or not isinstance(session, Session):
+            executor = self.session_maker()
+        else:
+            executor = session
+        result = executor.scalar(
+            statement,
+            params,
+            execution_options = execution_options,
+            bind_arguments = bind_arguments,
+            **kw,
+        )
+        if session is None:
+            executor.close()
+        return result
 
     def scalars_all(
-            self,
-            statement: Executable,
-            params: Optional[_ExecuteParams] = None,
-            *,
-            execution_options: Optional[_ExecuteOptions] = None,
-            bind_arguments: Optional[Mapping[str, Any]] = None,
-            **kw: Any,
+        self,
+        statement: Executable,
+        params: Optional[_ExecuteParams] = None,
+        *,
+        execution_options: Optional[_ExecuteOptions] = None,
+        bind_arguments: Optional[Mapping[str, Any]] = None,
+        session: Optional[Session] = None,
+        **kw: Any,
     ) -> List[Any]:
-        with self.session_maker() as session:
-            return session.scalars(
-                statement,
-                params,
-                execution_options=execution_options,
-                bind_arguments=bind_arguments,
-                **kw,
-            ).all()
+        if session is None or not isinstance(session, Session):
+            executor = self.session_maker()
+        else:
+            executor = session
+        result = executor.scalars(
+            statement,
+            params,
+            execution_options = execution_options,
+            bind_arguments = bind_arguments,
+            **kw,
+        ).all()
+        if session is None:
+            executor.close()
+        return result
 
     def get(
-            self,
-            entity: Type[_T],
-            ident: Any,
-            *,
-            options: Optional[Sequence[Any]] = None,
-            populate_existing: bool = False,
-            with_for_update: Optional[Any] = None,
-            identity_token: Optional[Any] = None,
-            execution_options: Optional[_ExecuteOptions] = None,
+        self,
+        entity: Type[_T],
+        ident: Any,
+        *,
+        options: Optional[Sequence[Any]] = None,
+        populate_existing: bool = False,
+        with_for_update: Optional[Any] = None,
+        identity_token: Optional[Any] = None,
+        execution_options: Optional[_ExecuteOptions] = None,
+        session: Optional[Session] = None,
     ) -> Optional[_T]:
-        with self.session_maker() as session:
-            return session.get(
-                entity,
-                ident,
-                options=options,
-                populate_existing=populate_existing,
-                with_for_update=with_for_update,
-                identity_token=identity_token,
-            )
+        if session is None or not isinstance(session, Session):
+            executor = self.session_maker()
+        else:
+            executor = session
+        result = executor.get(
+            entity,
+            ident,
+            options = options,
+            populate_existing = populate_existing,
+            with_for_update = with_for_update,
+            identity_token = identity_token,
+        )
+        if session is None:
+            executor.close()
+        return result
 
     def delete(self, instance: Any) -> None:
         with self.session_maker() as session:
             with session.begin():
                 session.delete(instance)
 
-    def save(self, *instances: Any, refresh: bool = False) -> None:
-        with self.session_maker() as session:
-            with session.begin():
-                session.add_all(instances)
-            if refresh:
-                [session.refresh(instance) for instance in instances]
+    def save(
+        self,
+        *instances: Any,
+        refresh: bool = False,
+        session: Optional[Session] = None
+    ) -> None:
+        if session is None or not isinstance(session, Session):
+            executor = self.session_maker()
+        else:
+            executor = session
+        executor.add_all(instances)
+        executor.commit()
+        if refresh:
+            [executor.refresh(instance) for instance in instances]
+        if session is None:
+            executor.close()
 
     def run_sync(
-            self,
-            fn: Callable[[Concatenate[Union[Session, Connection], _P]], _T],
-            *args: _P.args,
-            commit: bool = True,
-            on_close_pre: Callable[[_T], _R] = None,
-            is_session: bool = True,
-            **kwargs: _P.kwargs
+        self,
+        fn: Callable[[Concatenate[Union[Session, Connection], _P]], _T],
+        *args: _P.args,
+        commit: bool = True,
+        on_close_pre: Callable[[_T], _R] = None,
+        is_session: bool = True,
+        executor: Union[Session, Connection, None] = None,
+        **kwargs: _P.kwargs
     ) -> Union[_T, _R]:
-        maker = self.session_maker if is_session else self.engine.connect
-        with maker() as conn:
-            result = fn(conn, *args, **kwargs)
-            if on_close_pre:
-                result = on_close_pre(result)
-            if commit:
-                conn.commit()
+        need_close = False
+        if executor is None or not isinstance(executor, (Session, Connection)):
+            need_close = True
+            executor = self.session_maker() if is_session else self.engine.connect()
+        result = fn(executor, *args, **kwargs)
+        if on_close_pre:
+            result = on_close_pre(result)
+        if commit:
+            executor.commit()
+        if need_close:
+            executor.close()
         return result
