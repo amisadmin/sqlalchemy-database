@@ -2,11 +2,13 @@ import datetime
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator, List
 
+import pytest
 import pytest_asyncio
 from sqlalchemy import insert, select, update, delete
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm.exc import DetachedInstanceError
 
-from tests.conftest import async_db as db, Base, User
+from tests.conftest import async_db as db, Base, User, Group
 
 @pytest_asyncio.fixture
 async def prepare_database() -> AsyncGenerator[None, None]:
@@ -124,3 +126,31 @@ async def test_run_sync(fake_users):
 
     user_id = await db.run_sync(get_user, 2, on_close_pre = lambda r: r.id)
     assert user_id == 2
+
+async def test_executor(fake_users):
+    user = await db.get(User, 1)
+    assert user.id == 1
+    assert user.username == 'User-1'
+    assert user.group_id is None
+    with pytest.raises(DetachedInstanceError):
+        assert user.group is None
+
+    # test relationship
+    group = Group(name = 'group1')
+    async with db.session_maker() as session:
+        await db.save(group, refresh = True, session = session)
+        assert group.id == 1
+        user.group_id = group.id
+        await db.save(user, group, refresh = True, session = session)
+        assert user.group_id == group.id
+        assert user.group.name == 'group1'  # type: ignore
+
+        user2 = await db.get(User, 2, session = session, options = [selectinload(User.group)])
+        assert user2.group is None
+
+        user3 = await db.scalar(select(User).where(User.id == 3), session = session)
+        assert user3.group is None
+
+        users = await db.scalars_all(select(User), session = session)
+        for user in users:
+            assert user.group is None if user.group_id is None else user.group

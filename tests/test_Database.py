@@ -137,10 +137,10 @@ def test_executor(fake_users):
     # test relationship
     group = Group(name = 'group1')
     with db.session_maker() as session:
-        db.save(group, session = session)
+        db.save(group, refresh = True, session = session)
         assert group.id == 1
         user.group_id = group.id
-        db.save(user, session = session)
+        db.save(user, refresh = True, session = session)
         assert user.group_id == group.id
         assert user.group.name == 'group1'  # type: ignore
 
@@ -149,3 +149,7 @@ def test_executor(fake_users):
 
         user3 = db.scalar(select(User).where(User.id == 3), session = session)
         assert user3.group is None
+
+        users = db.scalars_all(select(User), session = session)
+        for user in users:
+            assert user.group is None if user.group_id is None else user.group
