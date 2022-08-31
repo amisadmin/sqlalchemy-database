@@ -279,7 +279,8 @@ def get_user(id: int, session: Session = Depends(db.session_generator)):
 
 ### [sqlalchemy](https://github.com/sqlalchemy/sqlalchemy)
 
-`SQLAlchemy-Database`在`SQLAlchemy`的基础上添加拓展功能. 更多功能及复杂使用,请参考`SQLAlchemy`[官方文档](https://www.sqlalchemy.org/).
+`SQLAlchemy-Database`在`SQLAlchemy`的基础上添加拓展功能.
+更多功能及复杂使用,请参考`SQLAlchemy`[官方文档](https://www.sqlalchemy.org/).
 
 `SQLAlchemy`非常强大,几乎可以满足你的任何复杂需求.
 
