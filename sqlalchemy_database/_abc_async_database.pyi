@@ -2,10 +2,16 @@ import abc
 from typing import Any, Optional, Mapping, Union, Sequence, Type, List, TypeVar, Callable
 
 from sqlalchemy.engine import Result, Connection
-from sqlalchemy.ext.asyncio import AsyncSession, AsyncConnection
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncConnection
 from sqlalchemy.sql import Executable
 from typing_extensions import ParamSpec, Concatenate
+
+try:
+    from sqlmodel import Session
+    from sqlmodel.ext.asyncio.session import AsyncSession
+except ImportError:
+    from sqlalchemy.orm import Session
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 _P = ParamSpec("_P")
 _T = TypeVar("_T")

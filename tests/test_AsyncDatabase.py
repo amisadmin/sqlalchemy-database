@@ -154,3 +154,11 @@ async def test_executor(fake_users):
         users = await db.scalars_all(select(User), session = session)
         for user in users:
             assert user.group is None if user.group_id is None else user.group
+
+async def test_sqlmodel_session(fake_users):
+    from sqlmodel import select
+
+    async with db.session_maker() as session:
+        result = await session.exec(select(User))
+        user = result.first()
+        assert user.id == 1

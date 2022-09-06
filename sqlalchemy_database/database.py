@@ -1,11 +1,18 @@
 from typing import Generator, Any, AsyncGenerator, Optional, Mapping, Union, Sequence, Type, List, Callable, TypeVar
 
 from sqlalchemy.engine import Result, Connection
-from sqlalchemy.ext.asyncio import AsyncSession, AsyncEngine, create_async_engine, AsyncConnection
+from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine, AsyncConnection
 from sqlalchemy.future import Engine, create_engine
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql import Executable, Select
 from typing_extensions import Concatenate, ParamSpec
+
+try:
+    from sqlmodel import Session
+    from sqlmodel.ext.asyncio.session import AsyncSession
+except ImportError:
+    from sqlalchemy.orm import Session
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 from sqlalchemy_database._abc_async_database import AbcAsyncDatabase
 
@@ -368,6 +375,7 @@ class Database(AbcAsyncDatabase):
     def __init__(self, engine: Engine, **session_options):
         super().__init__()
         self.engine: Engine = engine
+        session_options.setdefault('class_', Session)
         self.session_maker: Callable[..., Session] = sessionmaker(self.engine, **session_options)
 
     @classmethod

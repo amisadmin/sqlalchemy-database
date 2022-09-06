@@ -49,6 +49,7 @@ test = [
     "pytest-cov",
     "pytest-asyncio>=0.17",
     "httpx",
+    "sqlmodel",
 ]
 docs = [
     "mkdocs-material>=8.3.8",

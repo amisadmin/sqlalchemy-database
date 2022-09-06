@@ -153,3 +153,10 @@ def test_executor(fake_users):
         users = db.scalars_all(select(User), session = session)
         for user in users:
             assert user.group is None if user.group_id is None else user.group
+
+def test_sqlmodel_session(fake_users):
+    from sqlmodel import select
+
+    with db.session_maker() as session:
+        user = session.exec(select(User)).first()
+        assert user.id == 1
