@@ -27,3 +27,19 @@ class AbcAsyncDatabase(metaclass=abc.ABCMeta):  # noqa: B024
             if not asyncio.iscoroutinefunction(func):
                 func = functools.partial(to_thread, func)
             setattr(self, f"async_{func_name}", func)
+
+    async def asgi_dispatch(self, request, call_next):
+        """Middleware for ASGI applications, such as: Starlette, FastAPI, Quart, Sanic, Hug, Responder, etc.
+        Bind a SQLAlchemy session connection to the incoming HTTP request session context,
+        you can access the session object through `self.session`.
+        The instance shortcut method will also try to use this `session` object by default.
+        Example:
+            ```Python
+            app = FastAPI()
+            db = Database.create("sqlite:///test.db")
+            app.add_middleware(BaseHTTPMiddleware, db.asgi_dispatch)
+            ```
+        """
+        async with self:
+            response = await call_next(request)
+        return response
