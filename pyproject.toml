@@ -12,7 +12,7 @@ maintainers = [
 ]
 description = "SQLAlchemy-Database provides shortcut functions to common database operations for SQLAlchemy ORM."
 readme = "README.md"
-requires-python = ">=3.6.1"
+requires-python = ">=3.7"
 dynamic = ["version"]
 keywords = [
     "SQLAlchemy-Database",
@@ -63,3 +63,20 @@ testpaths = [
 ]
 # pytest-asyncio
 asyncio_mode = "auto"
+
+[tool.isort]
+profile = "black"
+atomic = true
+filter_files = true
+
+[tool.black]
+line-length = 130
+include = '\.pyi?$'
+
+[tool.pdm.scripts]
+lint = "pre-commit run --all-files"
+test = "coverage run -m pytest"
+[tool.pdm.dev-dependencies]
+dev = [
+    "pre-commit>=2.20.0",
+]
