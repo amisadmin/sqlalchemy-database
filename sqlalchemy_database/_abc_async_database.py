@@ -37,7 +37,7 @@ class AbcAsyncDatabase(metaclass=abc.ABCMeta):  # noqa: B024
             ```Python
             app = FastAPI()
             db = Database.create("sqlite:///test.db")
-            app.add_middleware(BaseHTTPMiddleware, db.asgi_dispatch)
+            app.add_middleware(BaseHTTPMiddleware, dispatch=db.asgi_dispatch)
             ```
         """
         async with self:

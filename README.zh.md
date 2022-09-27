@@ -125,7 +125,7 @@ async def fast_execute():
     # save(insert or update)
     user = User(name='new_user')
     await db.save(user)
-    
+
     # run_sync
     await db.run_sync(Base.metadata.create_all, is_session=False)
 
@@ -189,7 +189,7 @@ def fast_execute():
     # save(insert or update)
     user = User(name='new_user')
     db.save(user)
-    
+
     # run_sync
     db.run_sync(Base.metadata.create_all, is_session=False)
 
@@ -247,11 +247,11 @@ async def fast_execute(db: Union[AsyncDatabase, Database]):
     # delete
     user = User(id=1, name='test')
     await db.async_delete(user)
-    
+
     # save(insert or update)
     user = User(name='new_user')
     await db.async_save(user)
-    
+
     # run_sync
     await db.async_run_sync(Base.metadata.create_all, is_session=False)
 
@@ -273,6 +273,34 @@ async def get_user(id: int, session: AsyncSession = Depends(db.session_generator
 @app.get("/user/{id}")
 def get_user(id: int, session: Session = Depends(db.session_generator)):
     return session.get(User, id)
+```
+
+## FastAPI中使用中间件
+
+```python
+app = FastAPI()
+
+# Database
+sync_db = Database.create("sqlite:///amisadmin.db?check_same_thread=False")
+
+app.add_middleware(BaseHTTPMiddleware, dispatch=sync_db.asgi_dispatch)
+
+
+@app.get("/user/{id}")
+def get_user(id: int):
+    return sync_db.session.get(User, id)
+
+
+# AsyncDatabase
+async_db = AsyncDatabase.create("sqlite+aiosqlite:///amisadmin.db?check_same_thread=False")
+
+app.add_middleware(BaseHTTPMiddleware, dispatch=async_db.asgi_dispatch)
+
+
+@app.get("/user/{id}")
+async def get_user(id: int):
+    return await async_db.session.get(User, id)
+
 ```
 
 ## 更多教程文档
