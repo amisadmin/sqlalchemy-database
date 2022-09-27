@@ -3,11 +3,11 @@ import datetime
 import sqlalchemy as sa
 from sqlalchemy.orm import declarative_base
 
-from sqlalchemy_database import Database, AsyncDatabase
+from sqlalchemy_database import AsyncDatabase, Database
 
 # sqlite
-sync_db = Database.create('sqlite:///amisadmin.db?check_same_thread=False')
-async_db = AsyncDatabase.create('sqlite+aiosqlite:///amisadmin.db?check_same_thread=False')
+sync_db = Database.create("sqlite:///amisadmin.db?check_same_thread=False")
+async_db = AsyncDatabase.create("sqlite+aiosqlite:///amisadmin.db?check_same_thread=False")
 
 # mysql
 # sync_db = Database.create('mysql+pymysql://root:123456@127.0.0.1:3306/amisadmin?charset=utf8mb4')
@@ -26,18 +26,20 @@ async_db = AsyncDatabase.create('sqlite+aiosqlite:///amisadmin.db?check_same_thr
 
 Base = declarative_base()
 
+
 class User(Base):
     __tablename__ = "User"
-    id = sa.Column(sa.Integer, primary_key = True)
-    username = sa.Column(sa.String(30), unique = True, index = True, nullable = False)
-    password = sa.Column(sa.String(30), default = '')
-    create_time = sa.Column(sa.DateTime, default = datetime.datetime.utcnow)
-    group_id = sa.Column(sa.Integer, sa.ForeignKey('Group.id'))
-    group = sa.orm.relationship('Group', back_populates = 'users')
+    id = sa.Column(sa.Integer, primary_key=True)
+    username = sa.Column(sa.String(30), unique=True, index=True, nullable=False)
+    password = sa.Column(sa.String(30), default="")
+    create_time = sa.Column(sa.DateTime, default=datetime.datetime.utcnow)
+    group_id = sa.Column(sa.Integer, sa.ForeignKey("Group.id"))
+    group = sa.orm.relationship("Group", back_populates="users")
+
 
 class Group(Base):
     __tablename__ = "Group"
-    id = sa.Column(sa.Integer, primary_key = True)
-    name = sa.Column(sa.String(30), unique = True, index = True, nullable = False)
-    create_time = sa.Column(sa.DateTime, default = datetime.datetime.utcnow)
-    users = sa.orm.relationship("User", back_populates = "group", lazy = "dynamic")
+    id = sa.Column(sa.Integer, primary_key=True)
+    name = sa.Column(sa.String(30), unique=True, index=True, nullable=False)
+    create_time = sa.Column(sa.DateTime, default=datetime.datetime.utcnow)
+    users = sa.orm.relationship("User", back_populates="group", lazy="dynamic")

@@ -1,12 +1,13 @@
 import abc
 import asyncio
 import functools
-from typing import TypeVar, Callable
+from typing import Callable, TypeVar
 
 try:
     from asyncio import to_thread  # python 3.9+
 except ImportError:
     import contextvars
+
     from typing_extensions import ParamSpec
 
     _P = ParamSpec("_P")
@@ -18,11 +19,11 @@ except ImportError:
         func_call = functools.partial(ctx.run, func, *args, **kwargs)
         return await loop.run_in_executor(None, func_call)
 
-class AbcAsyncDatabase(metaclass = abc.ABCMeta):
 
+class AbcAsyncDatabase(metaclass=abc.ABCMeta):  # noqa: B024
     def __init__(self) -> None:
-        for func_name in ['execute', 'scalar', 'scalars_all', 'get', 'delete', 'save', 'run_sync']:
+        for func_name in ["execute", "scalar", "scalars_all", "get", "delete", "save", "run_sync"]:
             func = getattr(self, func_name)
             if not asyncio.iscoroutinefunction(func):
                 func = functools.partial(to_thread, func)
-            setattr(self, f'async_{func_name}', func)
+            setattr(self, f"async_{func_name}", func)

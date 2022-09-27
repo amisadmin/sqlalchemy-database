@@ -1,7 +1,19 @@
-from typing import Generator, Any, AsyncGenerator, Optional, Mapping, Union, Sequence, Type, List, Callable, TypeVar
+from typing import (
+    Any,
+    AsyncGenerator,
+    Callable,
+    Generator,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+    Type,
+    TypeVar,
+    Union,
+)
 
-from sqlalchemy.engine import Result, Connection
-from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine, AsyncConnection
+from sqlalchemy.engine import Connection, Result
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, create_async_engine
 from sqlalchemy.future import Engine, create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql import Executable, Select
@@ -23,9 +35,9 @@ _R = TypeVar("_R")
 _ExecuteParams = Union[Mapping[Any, Any], Sequence[Mapping[Any, Any]]]
 _ExecuteOptions = Mapping[Any, Any]
 
+
 class AsyncDatabase(AbcAsyncDatabase):
-    """`sqlalchemy` asynchronous database client
-    """
+    """`sqlalchemy` asynchronous database client"""
 
     def __init__(self, engine: AsyncEngine, **session_options):
         """
@@ -37,17 +49,17 @@ class AsyncDatabase(AbcAsyncDatabase):
         super().__init__()
         self.engine: AsyncEngine = engine
         """`sqlalchemy` Asynchronous Engine
-        
+
         Example:
             ```Python
             async with self.engine.begin() as conn:
                 await conn.run_sync(SQLModel.metadata.create_all)
             ```
         """
-        session_options.setdefault('class_', AsyncSession)
+        session_options.setdefault("class_", AsyncSession)
         self.session_maker: Callable[..., AsyncSession] = sessionmaker(self.engine, **session_options)
         """`sqlalchemy` session factory function
-        
+
         Example:
             ```Python
             async with self.session_maker() as sesson:
@@ -68,7 +80,7 @@ class AsyncDatabase(AbcAsyncDatabase):
         Returns:
             Return the client instance.
         """
-        kwargs.setdefault('future', True)
+        kwargs.setdefault("future", True)
         engine = create_async_engine(url, **kwargs)
         session_options = session_options or {}
         return cls(engine, **session_options)
@@ -139,7 +151,8 @@ class AsyncDatabase(AbcAsyncDatabase):
         Note:
             After the connection is closed, the session data will be cleared.
             Please use the 'on_close_pre' parameter to process the execution result.
-            example: The `Result.all`,`Result.scalar`,`Result.scalars`methods cannot be called again after the connection is closed.
+            example: The `Result.all`,`Result.scalar`,`Result.scalars`methods
+                cannot be called again after the connection is closed.
 
         """
         need_close = False
@@ -147,10 +160,10 @@ class AsyncDatabase(AbcAsyncDatabase):
             need_close = True
             if is_session:
                 executor = self.session_maker()
-                kw['bind_arguments'] = bind_arguments
+                kw["bind_arguments"] = bind_arguments
             else:
                 executor = await self.engine.connect()
-        async with ExecutorContextManager(executor, need_close = need_close) as executor:
+        async with ExecutorContextManager(executor, need_close=need_close) as executor:
             result = await executor.execute(statement, params, execution_options, **kw)  # type:ignore
             if on_close_pre:
                 result = on_close_pre(result)
@@ -180,12 +193,12 @@ class AsyncDatabase(AbcAsyncDatabase):
             executor = self.session_maker()
         else:
             executor = session
-        async with ExecutorContextManager(executor, need_close = need_close) as executor:
+        async with ExecutorContextManager(executor, need_close=need_close) as executor:
             result = await executor.scalar(
                 statement,
                 params,
-                execution_options = execution_options,
-                bind_arguments = bind_arguments,
+                execution_options=execution_options,
+                bind_arguments=bind_arguments,
                 **kw,
             )
             return result
@@ -211,13 +224,15 @@ class AsyncDatabase(AbcAsyncDatabase):
             executor = self.session_maker()
         else:
             executor = session
-        async with ExecutorContextManager(executor, need_close = need_close) as executor:
-            result = (await executor.scalars(
-                statement,
-                params,
-                execution_options = execution_options,
-                **kw,
-            )).all()
+        async with ExecutorContextManager(executor, need_close=need_close) as executor:
+            result = (
+                await executor.scalars(
+                    statement,
+                    params,
+                    execution_options=execution_options,
+                    **kw,
+                )
+            ).all()
             return result
 
     async def get(
@@ -278,14 +293,14 @@ class AsyncDatabase(AbcAsyncDatabase):
             executor = self.session_maker()
         else:
             executor = session
-        async with ExecutorContextManager(executor, need_close = need_close) as executor:
+        async with ExecutorContextManager(executor, need_close=need_close) as executor:
             result = await executor.get(
                 entity,
                 ident,
-                options = options,
-                populate_existing = populate_existing,
-                with_for_update = with_for_update,
-                identity_token = identity_token,
+                options=options,
+                populate_existing=populate_existing,
+                with_for_update=with_for_update,
+                identity_token=identity_token,
             )
             return result
 
@@ -295,12 +310,7 @@ class AsyncDatabase(AbcAsyncDatabase):
             async with session.begin():
                 await session.delete(instance)
 
-    async def save(
-        self,
-        *instances: Any,
-        refresh: bool = False,
-        session: Optional[AsyncSession] = None
-    ) -> None:
+    async def save(self, *instances: Any, refresh: bool = False, session: Optional[AsyncSession] = None) -> None:
         """
         Save the given collection of instances.
             *instances: A sequence of instance objects.
@@ -314,7 +324,7 @@ class AsyncDatabase(AbcAsyncDatabase):
             executor = self.session_maker()
         else:
             executor = session
-        async with ExecutorContextManager(executor, need_close = need_close) as executor:
+        async with ExecutorContextManager(executor, need_close=need_close) as executor:
             executor.add_all(instances)
             await executor.commit()
             if refresh:
@@ -328,7 +338,7 @@ class AsyncDatabase(AbcAsyncDatabase):
         on_close_pre: Callable[[_T], _R] = None,
         is_session: bool = True,
         executor: Union[AsyncSession, AsyncConnection, None] = None,
-        **kwargs: _P.kwargs
+        **kwargs: _P.kwargs,
     ) -> Union[_T, _R]:
         """
         Invoke the given sync callable passing sync self as the first
@@ -367,7 +377,7 @@ class AsyncDatabase(AbcAsyncDatabase):
         if executor is None or not isinstance(executor, (AsyncSession, AsyncConnection)):
             need_close = True
             executor = self.session_maker() if is_session else await self.engine.connect()
-        async with ExecutorContextManager(executor, need_close = need_close) as executor:
+        async with ExecutorContextManager(executor, need_close=need_close) as executor:
             result = await executor.run_sync(fn, *args, **kwargs)
             if on_close_pre:
                 result = on_close_pre(result)
@@ -375,20 +385,19 @@ class AsyncDatabase(AbcAsyncDatabase):
                 await executor.commit()
             return result
 
-class Database(AbcAsyncDatabase):
-    """`sqlalchemy` synchronous database client
 
-    """
+class Database(AbcAsyncDatabase):
+    """`sqlalchemy` synchronous database client"""
 
     def __init__(self, engine: Engine, **session_options):
         super().__init__()
         self.engine: Engine = engine
-        session_options.setdefault('class_', Session)
+        session_options.setdefault("class_", Session)
         self.session_maker: Callable[..., Session] = sessionmaker(self.engine, **session_options)
 
     @classmethod
     def create(cls, url: str, *, session_options: Optional[Mapping[str, Any]] = None, **kwargs) -> "Database":
-        kwargs.setdefault('future', True)
+        kwargs.setdefault("future", True)
         engine = create_engine(url, **kwargs)
         session_options = session_options or {}
         return cls(engine, **session_options)
@@ -415,10 +424,10 @@ class Database(AbcAsyncDatabase):
             need_close = True
             if is_session:
                 executor = self.session_maker()
-                kw['bind_arguments'] = bind_arguments
+                kw["bind_arguments"] = bind_arguments
             else:
                 executor = self.engine.connect()
-        with ExecutorContextManager(executor, need_close = need_close) as executor:
+        with ExecutorContextManager(executor, need_close=need_close) as executor:
             result = executor.execute(statement, params, execution_options, **kw)
             if on_close_pre:
                 result = on_close_pre(result)
@@ -442,12 +451,12 @@ class Database(AbcAsyncDatabase):
             executor = self.session_maker()
         else:
             executor = session
-        with ExecutorContextManager(executor, need_close = need_close) as executor:
+        with ExecutorContextManager(executor, need_close=need_close) as executor:
             result = executor.scalar(
                 statement,
                 params,
-                execution_options = execution_options,
-                bind_arguments = bind_arguments,
+                execution_options=execution_options,
+                bind_arguments=bind_arguments,
                 **kw,
             )
             return result
@@ -468,12 +477,12 @@ class Database(AbcAsyncDatabase):
             executor = self.session_maker()
         else:
             executor = session
-        with ExecutorContextManager(executor, need_close = need_close) as executor:
+        with ExecutorContextManager(executor, need_close=need_close) as executor:
             result = executor.scalars(
                 statement,
                 params,
-                execution_options = execution_options,
-                bind_arguments = bind_arguments,
+                execution_options=execution_options,
+                bind_arguments=bind_arguments,
                 **kw,
             ).all()
             return result
@@ -496,14 +505,14 @@ class Database(AbcAsyncDatabase):
             executor = self.session_maker()
         else:
             executor = session
-        with ExecutorContextManager(executor, need_close = need_close) as executor:
+        with ExecutorContextManager(executor, need_close=need_close) as executor:
             result = executor.get(
                 entity,
                 ident,
-                options = options,
-                populate_existing = populate_existing,
-                with_for_update = with_for_update,
-                identity_token = identity_token,
+                options=options,
+                populate_existing=populate_existing,
+                with_for_update=with_for_update,
+                identity_token=identity_token,
             )
             return result
 
@@ -512,19 +521,14 @@ class Database(AbcAsyncDatabase):
             with session.begin():
                 session.delete(instance)
 
-    def save(
-        self,
-        *instances: Any,
-        refresh: bool = False,
-        session: Optional[Session] = None
-    ) -> None:
+    def save(self, *instances: Any, refresh: bool = False, session: Optional[Session] = None) -> None:
         need_close = False
         if session is None or not isinstance(session, Session):
             need_close = True
             executor = self.session_maker()
         else:
             executor = session
-        with ExecutorContextManager(executor, need_close = need_close) as executor:
+        with ExecutorContextManager(executor, need_close=need_close) as executor:
             executor.add_all(instances)
             executor.commit()
             if refresh:
@@ -538,13 +542,13 @@ class Database(AbcAsyncDatabase):
         on_close_pre: Callable[[_T], _R] = None,
         is_session: bool = True,
         executor: Union[Session, Connection, None] = None,
-        **kwargs: _P.kwargs
+        **kwargs: _P.kwargs,
     ) -> Union[_T, _R]:
         need_close = False
         if executor is None or not isinstance(executor, (Session, Connection)):
             need_close = True
             executor = self.session_maker() if is_session else self.engine.connect()
-        with ExecutorContextManager(executor, need_close = need_close) as executor:
+        with ExecutorContextManager(executor, need_close=need_close) as executor:
             result = fn(executor, *args, **kwargs)
             if on_close_pre:
                 result = on_close_pre(result)
@@ -552,14 +556,11 @@ class Database(AbcAsyncDatabase):
                 executor.commit()
             return result
 
+
 class ExecutorContextManager:
     """Actuator context manager, optionally closing the executor"""
 
-    def __init__(
-        self,
-        executor: Union[Session, Connection, AsyncSession, AsyncConnection],
-        need_close: bool = True
-    ):
+    def __init__(self, executor: Union[Session, Connection, AsyncSession, AsyncConnection], need_close: bool = True):
         self.executor = executor
         self.need_close = need_close
 
