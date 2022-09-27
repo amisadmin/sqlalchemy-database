@@ -6,7 +6,7 @@ from sqlalchemy import delete, insert, select, update
 from sqlalchemy.orm import Session
 
 from sqlalchemy_database import AsyncDatabase, Database
-from tests.conftest import Base, User, async_db, sync_db
+from tests.conftest import Base, Group, User, async_db, sync_db
 
 
 @pytest.fixture(params=[async_db, sync_db])
@@ -124,3 +124,16 @@ async def test_async_run_sync(db, fake_users):
 
     user_id = await db.async_run_sync(get_user, 2, on_close_pre=lambda r: r.id)
     assert user_id == 2
+
+
+async def test_async_session_context_var(db, fake_users):
+    async with db:
+        # test db function
+        user = await db.async_get(User, 1)
+        assert user.id == 1
+        group = Group(name="group1")
+        await db.async_save(group, refresh=True)
+        assert group.id == 1
+        user.group_id = group.id
+
+    assert db.session is None

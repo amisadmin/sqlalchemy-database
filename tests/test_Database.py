@@ -170,3 +170,44 @@ def test_sqlmodel_session(fake_users):
     with db.session_maker() as session:
         user = session.exec(select(User)).first()
         assert user.id == 1
+
+
+def test_session_context_var(fake_users):
+    with db as session:
+        # test enter return session
+        user = session.get(User, 1)
+        assert user.id == 1
+
+        # test nested session
+        with db as session2:
+            user = session2.get(User, 1)
+            assert user.id == 1
+            assert session is session2
+
+        # test db.session
+        user = db.session.get(User, 1)
+        assert user.id == 1
+
+        # test db function
+        user = db.get(User, 1)
+        assert user.id == 1
+        group = Group(name="group1")
+        db.save(group, refresh=True)
+        assert group.id == 1
+        user.group_id = group.id
+
+        db.save(user, refresh=True)
+        assert user.group_id == group.id
+        assert user.group.name == "group1"  # type: ignore
+
+        user2 = db.get(User, 2)
+        assert user2.group is None
+
+        user3 = db.scalar(select(User).where(User.id == 3))
+        assert user3.group is None
+
+        users = db.scalars_all(select(User))
+        for user in users:
+            assert user.group is None if user.group_id is None else user.group
+
+    assert db.session is None

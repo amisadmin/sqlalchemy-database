@@ -1,3 +1,5 @@
+from contextvars import ContextVar
+from threading import Lock
 from typing import (
     Any,
     AsyncGenerator,
@@ -67,6 +69,50 @@ class AsyncDatabase(AbcAsyncDatabase):
                 await session.commit()
             ```
         """
+        self._session_lock = Lock()
+        self._session_enter_count = 0
+        self._session_context_var: ContextVar[Optional[AsyncSession]] = ContextVar("_session_context_var", default=None)
+
+    @property
+    def session(self) -> Optional[AsyncSession]:
+        """Return an instance of Session local to the current async context.
+
+        Note: Must register middleware in fastapi application to get session in request.
+
+        Example:
+            ```Python
+            app = FastAPI()
+            app.add_middleware(BaseHTTPMiddleware, db.asgi_dispatch)
+
+            @app.get('/get_user')
+            async def get_user(id:int):
+                return await db.session.get(User,id)
+            ```
+        In ordinary methods, session will return None. You can get it through:
+            ```Python
+            async with db:
+                db.session.get(User,id)
+            ```
+        """
+        return self._session_context_var.get() if self._session_enter_count > 0 else None
+
+    async def __aenter__(self):
+        with self._session_lock:
+            session = self.session
+            if session is None:
+                session = self.session_maker()
+                self._session_context_var_token = self._session_context_var.set(session)
+            self._session_enter_count += 1
+        return session
+
+    async def __aexit__(self, exc_type, exc_value, traceback):
+        with self._session_lock:
+            self._session_enter_count -= 1
+            if self._session_enter_count <= 0:
+                session = self._session_context_var.get()
+                if session is not None:
+                    await session.close()
+                self._session_context_var.reset(self._session_context_var_token)
 
     @classmethod
     def create(cls, url: str, *, session_options: Mapping[str, Any] = None, **kwargs) -> "AsyncDatabase":
@@ -159,7 +205,11 @@ class AsyncDatabase(AbcAsyncDatabase):
         if executor is None or not isinstance(executor, (AsyncSession, AsyncConnection)):
             need_close = True
             if is_session:
-                executor = self.session_maker()
+                executor = self.session
+                if executor is None:
+                    executor = self.session_maker()
+                else:
+                    need_close = False
                 kw["bind_arguments"] = bind_arguments
             else:
                 executor = await self.engine.connect()
@@ -189,12 +239,12 @@ class AsyncDatabase(AbcAsyncDatabase):
         """
         need_close = False
         if session is None or not isinstance(session, AsyncSession):
-            need_close = True
-            executor = self.session_maker()
-        else:
-            executor = session
-        async with ExecutorContextManager(executor, need_close=need_close) as executor:
-            result = await executor.scalar(
+            session = self.session
+            if session is None:
+                need_close = True
+                session = self.session_maker()
+        async with ExecutorContextManager(session, need_close=need_close) as session:
+            result = await session.scalar(
                 statement,
                 params,
                 execution_options=execution_options,
@@ -220,13 +270,13 @@ class AsyncDatabase(AbcAsyncDatabase):
         """
         need_close = False
         if session is None or not isinstance(session, AsyncSession):
-            need_close = True
-            executor = self.session_maker()
-        else:
-            executor = session
-        async with ExecutorContextManager(executor, need_close=need_close) as executor:
+            session = self.session
+            if session is None:
+                need_close = True
+                session = self.session_maker()
+        async with ExecutorContextManager(session, need_close=need_close) as session:
             result = (
-                await executor.scalars(
+                await session.scalars(
                     statement,
                     params,
                     execution_options=execution_options,
@@ -289,12 +339,12 @@ class AsyncDatabase(AbcAsyncDatabase):
         """
         need_close = False
         if session is None or not isinstance(session, AsyncSession):
-            need_close = True
-            executor = self.session_maker()
-        else:
-            executor = session
-        async with ExecutorContextManager(executor, need_close=need_close) as executor:
-            result = await executor.get(
+            session = self.session
+            if session is None:
+                need_close = True
+                session = self.session_maker()
+        async with ExecutorContextManager(session, need_close=need_close) as session:
+            result = await session.get(
                 entity,
                 ident,
                 options=options,
@@ -306,9 +356,13 @@ class AsyncDatabase(AbcAsyncDatabase):
 
     async def delete(self, instance: Any) -> None:
         """Deletes an instance object."""
-        async with self.session_maker() as session:
-            async with session.begin():
-                await session.delete(instance)
+        if self.session is not None:
+            await self.session.delete(instance)
+            await self.session.commit()
+        else:
+            async with self.session_maker() as session:
+                async with session.begin():
+                    await session.delete(instance)
 
     async def save(self, *instances: Any, refresh: bool = False, session: Optional[AsyncSession] = None) -> None:
         """
@@ -320,15 +374,15 @@ class AsyncDatabase(AbcAsyncDatabase):
         """
         need_close = False
         if session is None or not isinstance(session, AsyncSession):
-            need_close = True
-            executor = self.session_maker()
-        else:
-            executor = session
-        async with ExecutorContextManager(executor, need_close=need_close) as executor:
-            executor.add_all(instances)
-            await executor.commit()
+            session = self.session
+            if session is None:
+                need_close = True
+                session = self.session_maker()
+        async with ExecutorContextManager(session, need_close=need_close) as session:
+            session.add_all(instances)
+            await session.commit()
             if refresh:
-                [await executor.refresh(instance) for instance in instances]
+                [await session.refresh(instance) for instance in instances]
 
     async def run_sync(
         self,
@@ -374,9 +428,17 @@ class AsyncDatabase(AbcAsyncDatabase):
             APIs which will be properly adapted to the greenlet context.
         """
         need_close = False
+        if executor is None and is_session:
+            executor = self.session
         if executor is None or not isinstance(executor, (AsyncSession, AsyncConnection)):
-            need_close = True
-            executor = self.session_maker() if is_session else await self.engine.connect()
+            if is_session:
+                executor = self.session
+                if executor is None:
+                    executor = self.session_maker()
+                    need_close = True
+            else:
+                executor = await self.engine.connect()
+                need_close = True
         async with ExecutorContextManager(executor, need_close=need_close) as executor:
             result = await executor.run_sync(fn, *args, **kwargs)
             if on_close_pre:
@@ -394,6 +456,38 @@ class Database(AbcAsyncDatabase):
         self.engine: Engine = engine
         session_options.setdefault("class_", Session)
         self.session_maker: Callable[..., Session] = sessionmaker(self.engine, **session_options)
+        self._session_lock = Lock()
+        self._session_enter_count = 0
+        self._session_context_var: ContextVar[Optional[Session]] = ContextVar("_session_context_var", default=None)
+
+    @property
+    def session(self) -> Optional[Session]:
+        """Return an instance of Session local to the current context."""
+        return self._session_context_var.get() if self._session_enter_count > 0 else None
+
+    def __enter__(self):
+        with self._session_lock:
+            session = self.session
+            if session is None:
+                session = self.session_maker()
+                self._session_context_var_token = self._session_context_var.set(session)
+            self._session_enter_count += 1
+        return session
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        with self._session_lock:
+            self._session_enter_count -= 1
+            if self._session_enter_count <= 0:
+                session = self._session_context_var.get()
+                if session is not None:
+                    session.close()
+                self._session_context_var.reset(self._session_context_var_token)
+
+    async def __aenter__(self):
+        return self.__enter__()
+
+    async def __aexit__(self, exc_type, exc_value, traceback):
+        return self.__exit__(exc_type, exc_value, traceback)
 
     @classmethod
     def create(cls, url: str, *, session_options: Optional[Mapping[str, Any]] = None, **kwargs) -> "Database":
@@ -420,10 +514,16 @@ class Database(AbcAsyncDatabase):
         **kw: Any,
     ) -> Union[Result, _T]:
         need_close = False
+        if executor is None and is_session:
+            executor = self.session
         if executor is None or not isinstance(executor, (Session, Connection)):
             need_close = True
             if is_session:
-                executor = self.session_maker()
+                executor = self.session
+                if executor is None:
+                    executor = self.session_maker()
+                else:
+                    need_close = False
                 kw["bind_arguments"] = bind_arguments
             else:
                 executor = self.engine.connect()
@@ -447,12 +547,12 @@ class Database(AbcAsyncDatabase):
     ) -> Any:
         need_close = False
         if session is None or not isinstance(session, Session):
-            need_close = True
-            executor = self.session_maker()
-        else:
-            executor = session
-        with ExecutorContextManager(executor, need_close=need_close) as executor:
-            result = executor.scalar(
+            session = self.session
+            if session is None:
+                need_close = True
+                session = self.session_maker()
+        with ExecutorContextManager(session, need_close=need_close) as session:
+            result = session.scalar(
                 statement,
                 params,
                 execution_options=execution_options,
@@ -473,12 +573,12 @@ class Database(AbcAsyncDatabase):
     ) -> List[Any]:
         need_close = False
         if session is None or not isinstance(session, Session):
-            need_close = True
-            executor = self.session_maker()
-        else:
-            executor = session
-        with ExecutorContextManager(executor, need_close=need_close) as executor:
-            result = executor.scalars(
+            session = self.session
+            if session is None:
+                need_close = True
+                session = self.session_maker()
+        with ExecutorContextManager(session, need_close=need_close) as session:
+            result = session.scalars(
                 statement,
                 params,
                 execution_options=execution_options,
@@ -501,12 +601,12 @@ class Database(AbcAsyncDatabase):
     ) -> Optional[_T]:
         need_close = False
         if session is None or not isinstance(session, Session):
-            need_close = True
-            executor = self.session_maker()
-        else:
-            executor = session
-        with ExecutorContextManager(executor, need_close=need_close) as executor:
-            result = executor.get(
+            session = self.session
+            if session is None:
+                need_close = True
+                session = self.session_maker()
+        with ExecutorContextManager(session, need_close=need_close) as session:
+            result = session.get(
                 entity,
                 ident,
                 options=options,
@@ -517,22 +617,26 @@ class Database(AbcAsyncDatabase):
             return result
 
     def delete(self, instance: Any) -> None:
-        with self.session_maker() as session:
-            with session.begin():
-                session.delete(instance)
+        if self.session is not None:
+            self.session.delete(instance)
+            self.session.commit()
+        else:
+            with self.session_maker() as session:
+                with session.begin():
+                    session.delete(instance)
 
     def save(self, *instances: Any, refresh: bool = False, session: Optional[Session] = None) -> None:
         need_close = False
         if session is None or not isinstance(session, Session):
-            need_close = True
-            executor = self.session_maker()
-        else:
-            executor = session
-        with ExecutorContextManager(executor, need_close=need_close) as executor:
-            executor.add_all(instances)
-            executor.commit()
+            session = self.session
+            if session is None:
+                need_close = True
+                session = self.session_maker()
+        with ExecutorContextManager(session, need_close=need_close) as session:
+            session.add_all(instances)
+            session.commit()
             if refresh:
-                [executor.refresh(instance) for instance in instances]
+                [session.refresh(instance) for instance in instances]
 
     def run_sync(
         self,
@@ -547,7 +651,14 @@ class Database(AbcAsyncDatabase):
         need_close = False
         if executor is None or not isinstance(executor, (Session, Connection)):
             need_close = True
-            executor = self.session_maker() if is_session else self.engine.connect()
+            if is_session:
+                executor = self.session
+                if executor is None:
+                    executor = self.session_maker()
+                else:
+                    need_close = False
+            else:
+                executor = self.engine.connect()
         with ExecutorContextManager(executor, need_close=need_close) as executor:
             result = fn(executor, *args, **kwargs)
             if on_close_pre:

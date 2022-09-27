@@ -172,3 +172,43 @@ async def test_sqlmodel_session(fake_users):
         result = await session.exec(select(User))
         user = result.first()
         assert user.id == 1
+
+
+async def test_async_session_context_var(fake_users):
+    async with db as session:
+        # test enter return session
+        user = await session.get(User, 1)
+        assert user.id == 1
+
+        # test nested session
+        async with db as session2:
+            user = await session2.get(User, 1)
+            assert user.id == 1
+            assert session is session2
+        # test db.session
+        user = await db.session.get(User, 1)
+        assert user.id == 1
+
+        # test db function
+        user = await db.get(User, 1)
+        assert user.id == 1
+        group = Group(name="group1")
+        await db.save(group, refresh=True)
+        assert group.id == 1
+        user.group_id = group.id
+
+        await db.save(user, group, refresh=True)
+        assert user.group_id == group.id
+        assert user.group.name == "group1"  # type: ignore
+
+        user2 = await db.get(User, 2, options=[selectinload(User.group)])
+        assert user2.group is None
+
+        user3 = await db.scalar(select(User).where(User.id == 3))
+        assert user3.group is None
+
+        users = await db.scalars_all(select(User))
+        for user in users:
+            assert user.group is None if user.group_id is None else user.group
+
+    assert db.session is None
