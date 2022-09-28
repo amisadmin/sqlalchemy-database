@@ -173,16 +173,16 @@ def test_sqlmodel_session(fake_users):
 
 
 def test_session_context_var(fake_users):
-    with db as session:
+    with db() as session:
         # test enter return session
         user = session.get(User, 1)
         assert user.id == 1
 
         # test nested session
-        with db as session2:
+        with db() as session2:
             user = session2.get(User, 1)
             assert user.id == 1
-            assert session is session2
+            assert session is not session2
 
         # test db.session
         user = db.session.get(User, 1)

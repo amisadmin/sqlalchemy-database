@@ -1,5 +1,4 @@
 from contextvars import ContextVar
-from threading import Lock
 from typing import (
     Any,
     AsyncGenerator,
@@ -69,8 +68,6 @@ class AsyncDatabase(AbcAsyncDatabase):
                 await session.commit()
             ```
         """
-        self._session_lock = Lock()
-        self._session_enter_count = 0
         self._session_context_var: ContextVar[Optional[AsyncSession]] = ContextVar("_session_context_var", default=None)
 
     @property
@@ -82,7 +79,7 @@ class AsyncDatabase(AbcAsyncDatabase):
         Example:
             ```Python
             app = FastAPI()
-            app.add_middleware(BaseHTTPMiddleware, db.asgi_dispatch)
+            app.add_middleware(BaseHTTPMiddleware, dispatch=db.asgi_dispatch)
 
             @app.get('/get_user')
             async def get_user(id:int):
@@ -90,29 +87,14 @@ class AsyncDatabase(AbcAsyncDatabase):
             ```
         In ordinary methods, session will return None. You can get it through:
             ```Python
-            async with db:
+            async with db():
                 db.session.get(User,id)
             ```
         """
-        return self._session_context_var.get() if self._session_enter_count > 0 else None
+        return self._session_context_var.get()
 
-    async def __aenter__(self):
-        with self._session_lock:
-            session = self.session
-            if session is None:
-                session = self.session_maker()
-                self._session_context_var_token = self._session_context_var.set(session)
-            self._session_enter_count += 1
-        return session
-
-    async def __aexit__(self, exc_type, exc_value, traceback):
-        with self._session_lock:
-            self._session_enter_count -= 1
-            if self._session_enter_count <= 0:
-                session = self._session_context_var.get()
-                if session is not None:
-                    await session.close()
-                self._session_context_var.reset(self._session_context_var_token)
+    def __call__(self):
+        return AsyncSessionContextVarManager(self)
 
     @classmethod
     def create(cls, url: str, *, session_options: Mapping[str, Any] = None, **kwargs) -> "AsyncDatabase":
@@ -428,8 +410,6 @@ class AsyncDatabase(AbcAsyncDatabase):
             APIs which will be properly adapted to the greenlet context.
         """
         need_close = False
-        if executor is None and is_session:
-            executor = self.session
         if executor is None or not isinstance(executor, (AsyncSession, AsyncConnection)):
             if is_session:
                 executor = self.session
@@ -456,38 +436,15 @@ class Database(AbcAsyncDatabase):
         self.engine: Engine = engine
         session_options.setdefault("class_", Session)
         self.session_maker: Callable[..., Session] = sessionmaker(self.engine, **session_options)
-        self._session_lock = Lock()
-        self._session_enter_count = 0
         self._session_context_var: ContextVar[Optional[Session]] = ContextVar("_session_context_var", default=None)
 
     @property
     def session(self) -> Optional[Session]:
         """Return an instance of Session local to the current context."""
-        return self._session_context_var.get() if self._session_enter_count > 0 else None
+        return self._session_context_var.get()
 
-    def __enter__(self):
-        with self._session_lock:
-            session = self.session
-            if session is None:
-                session = self.session_maker()
-                self._session_context_var_token = self._session_context_var.set(session)
-            self._session_enter_count += 1
-        return session
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        with self._session_lock:
-            self._session_enter_count -= 1
-            if self._session_enter_count <= 0:
-                session = self._session_context_var.get()
-                if session is not None:
-                    session.close()
-                self._session_context_var.reset(self._session_context_var_token)
-
-    async def __aenter__(self):
-        return self.__enter__()
-
-    async def __aexit__(self, exc_type, exc_value, traceback):
-        return self.__exit__(exc_type, exc_value, traceback)
+    def __call__(self):
+        return SessionContextVarManager(self)
 
     @classmethod
     def create(cls, url: str, *, session_options: Optional[Mapping[str, Any]] = None, **kwargs) -> "Database":
@@ -514,8 +471,6 @@ class Database(AbcAsyncDatabase):
         **kw: Any,
     ) -> Union[Result, _T]:
         need_close = False
-        if executor is None and is_session:
-            executor = self.session
         if executor is None or not isinstance(executor, (Session, Connection)):
             need_close = True
             if is_session:
@@ -688,3 +643,45 @@ class ExecutorContextManager:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         if self.need_close:
             await self.executor.close()
+
+
+class AsyncSessionContextVarManager:
+    def __init__(self, db: AsyncDatabase):
+        self.db = db
+        self.token = None
+
+    async def __aenter__(self):
+        session = self.db.session_maker()
+        self.token = self.db._session_context_var.set(session)
+        return session
+
+    async def __aexit__(self, exc_type, exc_value, traceback):
+        session = self.db._session_context_var.get()
+        if exc_type is not None:
+            await session.rollback()
+        await session.close()
+        self.db._session_context_var.reset(self.token)
+
+
+class SessionContextVarManager:
+    def __init__(self, db: Database):
+        self.db = db
+        self.token = None
+
+    def __enter__(self):
+        session = self.db.session_maker()
+        self.token = self.db._session_context_var.set(session)
+        return session
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        session = self.db._session_context_var.get()
+        if exc_type is not None:
+            session.rollback()
+        session.close()
+        self.db._session_context_var.reset(self.token)
+
+    async def __aenter__(self):
+        return self.__enter__()
+
+    async def __aexit__(self, exc_type, exc_value, traceback):
+        self.__exit__(exc_type, exc_value, traceback)

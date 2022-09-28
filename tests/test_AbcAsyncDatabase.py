@@ -127,7 +127,7 @@ async def test_async_run_sync(db, fake_users):
 
 
 async def test_async_session_context_var(db, fake_users):
-    async with db:
+    async with db():
         # test db function
         user = await db.async_get(User, 1)
         assert user.id == 1

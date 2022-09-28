@@ -16,6 +16,8 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from sqlalchemy.sql import Executable
 from typing_extensions import Concatenate, ParamSpec
 
+from sqlalchemy_database.database import AsyncSessionContextVarManager
+
 try:
     from sqlmodel import Session
     from sqlmodel.ext.asyncio.session import AsyncSession
@@ -92,3 +94,5 @@ class AbcAsyncDatabase(metaclass=abc.ABCMeta):
         **kwargs: _P.kwargs,
     ) -> Union[_T, _R]: ...
     async def asgi_dispatch(self, request, call_next): ...
+    def __call__(self) -> AsyncSessionContextVarManager:
+        pass
