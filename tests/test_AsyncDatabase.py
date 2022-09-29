@@ -179,13 +179,15 @@ async def test_async_session_context_var(fake_users):
         # test enter return session
         user = await session.get(User, 1)
         assert user.id == 1
-
+        assert session is db.session
         # test nested session
         async with db() as session2:
             user = await session2.get(User, 1)
             assert user.id == 1
+            assert session2 is db.session
             assert session is not session2
         # test db.session
+        assert session is db.session
         user = await db.session.get(User, 1)
         assert user.id == 1
 

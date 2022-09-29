@@ -177,13 +177,14 @@ def test_session_context_var(fake_users):
         # test enter return session
         user = session.get(User, 1)
         assert user.id == 1
-
+        assert session is db.session
         # test nested session
         with db() as session2:
             user = session2.get(User, 1)
             assert user.id == 1
+            assert session2 is db.session
             assert session is not session2
-
+        assert session is db.session
         # test db.session
         user = db.session.get(User, 1)
         assert user.id == 1
