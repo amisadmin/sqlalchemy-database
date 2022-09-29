@@ -1,4 +1,6 @@
+import asyncio
 import datetime
+from asyncio import AbstractEventLoop
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator, List
 
@@ -174,7 +176,13 @@ async def test_sqlmodel_session(fake_users):
         assert user.id == 1
 
 
-async def test_async_session_context_var(fake_users):
+@pytest.fixture()
+def lock(event_loop: AbstractEventLoop):
+    return asyncio.Lock(loop=event_loop)
+
+
+async def test_async_session_context_var(fake_users, lock, i=1):
+
     async with db() as session:
         # test enter return session
         user = await session.get(User, 1)
@@ -194,14 +202,13 @@ async def test_async_session_context_var(fake_users):
         # test db function
         user = await db.get(User, 1)
         assert user.id == 1
-        group = Group(name="group1")
+        group = Group(name=f"group{i}")
         await db.save(group, refresh=True)
-        assert group.id == 1
-        user.group_id = group.id
-
-        await db.save(user, group, refresh=True)
-        assert user.group_id == group.id
-        assert user.group.name == "group1"  # type: ignore
+        async with lock:  # test async concurrency safe, because the same user is operated here, so a lock is needed
+            user.group_id = group.id
+            await db.save(user, group, refresh=True)
+            assert user.group_id == group.id
+            assert user.group.name == f"group{i}"  # type: ignore
 
         user2 = await db.get(User, 2, options=[selectinload(User.group)])
         assert user2.group is None
@@ -214,3 +221,14 @@ async def test_async_session_context_var(fake_users):
             assert user.group is None if user.group_id is None else user.group
 
     assert db.session is None
+    return i
+
+
+def test_asyncio_groups(fake_users, event_loop: AbstractEventLoop, lock):
+    task_count = 40
+    tasks = [asyncio.ensure_future(test_async_session_context_var(fake_users, lock, i=i)) for i in range(task_count)]
+    event_loop.run_until_complete(asyncio.wait(tasks))
+    assert len(tasks) == task_count
+    for task in tasks:
+        assert task.result() is not None
+        assert task.exception() is None

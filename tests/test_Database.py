@@ -1,4 +1,6 @@
 import datetime
+import threading
+from concurrent.futures import ALL_COMPLETED, ThreadPoolExecutor, wait
 from contextlib import contextmanager
 from typing import Generator, List
 
@@ -172,7 +174,10 @@ def test_sqlmodel_session(fake_users):
         assert user.id == 1
 
 
-def test_session_context_var(fake_users):
+lock = threading.Lock()
+
+
+def test_session_context_var(fake_users, i=1):
     with db() as session:
         # test enter return session
         user = session.get(User, 1)
@@ -192,14 +197,14 @@ def test_session_context_var(fake_users):
         # test db function
         user = db.get(User, 1)
         assert user.id == 1
-        group = Group(name="group1")
+        group = Group(name=f"group{i}")
         db.save(group, refresh=True)
-        assert group.id == 1
-        user.group_id = group.id
 
-        db.save(user, refresh=True)
-        assert user.group_id == group.id
-        assert user.group.name == "group1"  # type: ignore
+        with lock:  # test thread safe, because the same user is operated here, so a lock is needed
+            user.group_id = group.id
+            db.save(user, refresh=True)
+            assert user.group_id == group.id
+            assert user.group.name == f"group{i}"  # type: ignore
 
         user2 = db.get(User, 2)
         assert user2.group is None
@@ -210,5 +215,15 @@ def test_session_context_var(fake_users):
         users = db.scalars_all(select(User))
         for user in users:
             assert user.group is None if user.group_id is None else user.group
-
     assert db.session is None
+    return i
+
+
+def test_ThreadPoolExecutor(fake_users):
+    task_count = 40
+    pool = ThreadPoolExecutor(max_workers=20)  # 创建线程池,设置最大线程数
+    all_task = [pool.submit(test_session_context_var, fake_users, k) for k in range(task_count)]  # 投递任务
+    # print(all_task)
+    done, fail = wait(all_task, return_when=ALL_COMPLETED)  # 等待线程运行完毕
+    results = {task.result() for task in done}
+    assert len(results) == task_count
