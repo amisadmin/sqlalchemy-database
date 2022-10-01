@@ -178,7 +178,7 @@ async def test_sqlmodel_session(fake_users):
 
 @pytest.fixture()
 def lock(event_loop: AbstractEventLoop):
-    return asyncio.Lock(loop=event_loop)
+    return asyncio.Lock()
 
 
 async def test_async_session_context_var(fake_users, lock, i=1):
