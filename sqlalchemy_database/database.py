@@ -427,6 +427,28 @@ class AsyncDatabase(AbcAsyncDatabase):
                 await executor.commit()
             return result
 
+    async def refresh(self, instance, attribute_names=None, with_for_update=None, session: Optional[AsyncSession] = None):
+        """
+        Refresh the attributes of the given instance from the database.
+        Args:
+            instance: The instance to be refreshed.
+            attribute_names: Optional list of attribute names to refresh.
+            with_for_update: optional boolean ``True`` indicating FOR UPDATE should be used,
+                or may be a dictionary containing flags to
+                indicate a more specific set of FOR UPDATE flags for the SELECT;
+                flags should match the parameters of :meth:`_query.Query.with_for_update`.
+                Supersedes the :paramref:`.Session.refresh.lockmode` parameter.
+            session: If not specified, an `AsyncSession` is created.
+        """
+        need_close = False
+        if session is None or not isinstance(session, AsyncSession):
+            session = self.session
+            if session is None:
+                need_close = True
+                session = self.session_maker()
+        async with ExecutorContextManager(session, need_close=need_close) as session:
+            await session.refresh(instance, attribute_names, with_for_update)
+
 
 class Database(AbcAsyncDatabase):
     """`sqlalchemy` synchronous database client"""
@@ -621,6 +643,16 @@ class Database(AbcAsyncDatabase):
             if commit:
                 executor.commit()
             return result
+
+    def refresh(self, instance, attribute_names=None, with_for_update=None, session: Optional[Session] = None):
+        need_close = False
+        if session is None or not isinstance(session, Session):
+            session = self.session
+            if session is None:
+                need_close = True
+                session = self.session_maker()
+        with ExecutorContextManager(session, need_close=need_close) as session:
+            session.refresh(instance, attribute_names=attribute_names, with_for_update=with_for_update)
 
 
 class ExecutorContextManager:

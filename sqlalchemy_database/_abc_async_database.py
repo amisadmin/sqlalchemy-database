@@ -22,7 +22,7 @@ except ImportError:
 
 class AbcAsyncDatabase(metaclass=abc.ABCMeta):  # noqa: B024
     def __init__(self) -> None:
-        for func_name in ["execute", "scalar", "scalars_all", "get", "delete", "save", "run_sync"]:
+        for func_name in ["execute", "scalar", "scalars_all", "get", "delete", "save", "run_sync", "refresh"]:
             func = getattr(self, func_name)
             if not asyncio.iscoroutinefunction(func):
                 func = functools.partial(to_thread, func)

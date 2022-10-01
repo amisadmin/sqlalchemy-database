@@ -93,6 +93,9 @@ class AbcAsyncDatabase(metaclass=abc.ABCMeta):
         executor: Union[Session, Connection, AsyncSession, AsyncConnection, None] = None,
         **kwargs: _P.kwargs,
     ) -> Union[_T, _R]: ...
+    async def async_refresh(
+        self, instance, attribute_names=None, with_for_update=None, session: Optional[AsyncSession] = None
+    ): ...
     async def asgi_dispatch(self, request, call_next): ...
     def __call__(self) -> AsyncSessionContextVarManager:
         pass
