@@ -329,10 +329,11 @@ class AsyncDatabase(AbcAsyncDatabase):
             )
             return result
 
-    async def delete(self, instance: Any) -> None:
-        """Deletes an instance object."""
+    async def delete(self, *instances: Any) -> None:
+        """Delete instances of given objects list."""
         async with await self._executor_maker() as session:
-            await session.delete(instance)
+            for instance in instances:
+                await session.delete(instance)
             await session.commit()
 
     async def save(self, *instances: Any, refresh: bool = False, session: Optional[AsyncSession] = None) -> None:
@@ -553,9 +554,10 @@ class Database(AbcAsyncDatabase):
             )
             return result
 
-    def delete(self, instance: Any) -> None:
+    def delete(self, *instances: Any) -> None:
         with self._executor_maker() as session:
-            session.delete(instance)
+            for instance in instances:
+                session.delete(instance)
             session.commit()
 
     def save(self, *instances: Any, refresh: bool = False, session: Optional[Session] = None) -> None:
