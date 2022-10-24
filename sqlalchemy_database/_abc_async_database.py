@@ -40,6 +40,7 @@ class AbcAsyncDatabase(metaclass=abc.ABCMeta):  # noqa: B024
             app.add_middleware(BaseHTTPMiddleware, dispatch=db.asgi_dispatch)
             ```
         """
-        async with self.__call__():
-            response = await call_next(request)
-        return response
+        if self.session is None:  # bind session to request
+            async with self.__call__():
+                return await call_next(request)
+        return await call_next(request)

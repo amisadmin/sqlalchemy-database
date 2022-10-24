@@ -40,11 +40,17 @@ _ExecuteOptions = Mapping[Any, Any]
 class AsyncDatabase(AbcAsyncDatabase):
     """`sqlalchemy` asynchronous database client"""
 
-    def __init__(self, engine: AsyncEngine, **session_options):
+    def __init__(
+        self,
+        engine: AsyncEngine,
+        commit_on_close: bool = False,
+        **session_options,
+    ):
         """
         Initialize the client through the asynchronous engine
         Args:
             engine: Asynchronous Engine
+            commit_on_close: Whether to commit the session when the context manager or session generator exits.
             **session_options: The default `session` initialization parameters
         """
         super().__init__()
@@ -57,6 +63,8 @@ class AsyncDatabase(AbcAsyncDatabase):
                 await conn.run_sync(SQLModel.metadata.create_all)
             ```
         """
+        self.commit_on_close: bool = commit_on_close
+        """Whether to commit the session when the context manager or session generator exits."""
         session_options.setdefault("class_", AsyncSession)
         self.session_maker: Callable[..., AsyncSession] = sessionmaker(self.engine, **session_options)
         """`sqlalchemy` session factory function
@@ -97,11 +105,14 @@ class AsyncDatabase(AbcAsyncDatabase):
         return AsyncSessionContextVarManager(self)
 
     @classmethod
-    def create(cls, url: str, *, session_options: Mapping[str, Any] = None, **kwargs) -> "AsyncDatabase":
+    def create(
+        cls, url: str, *, commit_on_close: bool = False, session_options: Mapping[str, Any] = None, **kwargs
+    ) -> "AsyncDatabase":
         """
         Initialize the client with a database connection string
         Args:
             url: Asynchronous database connection string
+            commit_on_close: Whether to commit the session when the context manager or session generator exits.
             session_options: The default `session` initialization parameters
             **kwargs: Asynchronous engine initialization parameters
 
@@ -111,7 +122,7 @@ class AsyncDatabase(AbcAsyncDatabase):
         kwargs.setdefault("future", True)
         engine = create_async_engine(url, **kwargs)
         session_options = session_options or {}
-        return cls(engine, **session_options)
+        return cls(engine, commit_on_close=commit_on_close, **session_options)
 
     async def session_generator(self) -> AsyncGenerator[AsyncSession, Any]:
         """AsyncSession Generator, available for FastAPI dependencies.
@@ -125,6 +136,8 @@ class AsyncDatabase(AbcAsyncDatabase):
         """
         async with self.session_maker() as session:
             yield session
+            if self.commit_on_close:
+                await session.commit()
 
     async def _executor_maker(
         self, executor: Union[AsyncSession, AsyncConnection, None] = None, is_session: bool = True
@@ -421,9 +434,10 @@ class AsyncDatabase(AbcAsyncDatabase):
 class Database(AbcAsyncDatabase):
     """`sqlalchemy` synchronous database client"""
 
-    def __init__(self, engine: Engine, **session_options):
+    def __init__(self, engine: Engine, commit_on_close: bool = False, **session_options):
         super().__init__()
         self.engine: Engine = engine
+        self.commit_on_close: bool = commit_on_close
         session_options.setdefault("class_", Session)
         self.session_maker: Callable[..., Session] = sessionmaker(self.engine, **session_options)
         self._session_context_var: ContextVar[Optional[Session]] = ContextVar("_session_context_var", default=None)
@@ -437,7 +451,9 @@ class Database(AbcAsyncDatabase):
         return SessionContextVarManager(self)
 
     @classmethod
-    def create(cls, url: str, *, session_options: Optional[Mapping[str, Any]] = None, **kwargs) -> "Database":
+    def create(
+        cls, url: str, *, commit_on_close: bool = False, session_options: Optional[Mapping[str, Any]] = None, **kwargs
+    ) -> "Database":
         kwargs.setdefault("future", True)
         engine = create_engine(url, **kwargs)
         session_options = session_options or {}
@@ -446,6 +462,8 @@ class Database(AbcAsyncDatabase):
     def session_generator(self) -> Generator[Session, Any, None]:
         with self.session_maker() as session:
             yield session
+            if self.commit_on_close:
+                session.commit()
 
     def _executor_maker(
         self, executor: Union[Session, Connection, None] = None, is_session: bool = True
@@ -626,6 +644,8 @@ class AsyncSessionContextVarManager:
         session = self.db._session_context_var.get()
         if exc_type is not None:
             await session.rollback()
+        if self.db.commit_on_close:
+            await session.commit()
         await session.close()
         self.db._session_context_var.reset(self.token)
 
@@ -644,6 +664,8 @@ class SessionContextVarManager:
         session = self.db._session_context_var.get()
         if exc_type is not None:
             session.rollback()
+        if self.db.commit_on_close:
+            session.commit()
         session.close()
         self.db._session_context_var.reset(self.token)
 
