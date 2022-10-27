@@ -1,5 +1,3 @@
-# Introduction
-
 [简体中文](https://github.com/amisadmin/sqlalchemy_database/blob/master/README.zh.md)
 | [English](https://github.com/amisadmin/sqlalchemy_database)
 
@@ -68,9 +66,9 @@ from sqlmodel import SQLModel, Field
 
 class User(SQLModel, table=True):
     id: int = Field(default=None, primary_key=True, nullable=False)
-    username: str = Field(title='username', sa_column=Column(String(100), unique=True, index=True, nullable=False))
+    username: str = Field(title='username', max_length=30, unique=True, index=True, nullable=False)
     password: str = Field(default='', title='Password')
-    create_time: datetime = Field(default_factory=datetime.utcnow, title='Create Time')
+    create_time: datetime = Field(default_factory=datetime.now, title='Create Time')
 ```
 
 ## AsyncDatabase
@@ -85,55 +83,6 @@ db = AsyncDatabase.create('sqlite+aiosqlite:///amisadmin.db?check_same_thread=Fa
 # db = AsyncDatabase.create('mysql+aiomysql://root:123456@127.0.0.1:3306/amisadmin?charset=utf8mb4')# mysql
 # db = AsyncDatabase.create('postgresql+asyncpg://postgres:root@127.0.0.1:5432/amisadmin')# postgresql
 
-```
-
-### Shortcut functions
-
-```python
-from sqlalchemy import insert, select, update, delete
-
-
-async def fast_execute():
-    # update
-    stmt = update(User).where(User.id == 1).values({'username': 'new_user'})
-    result = await db.execute(stmt)
-
-    # select
-    stmt = select(User).where(User.id == 1)
-    user = await db.execute(stmt, on_close_pre=lambda r: r.scalar())
-
-    # insert
-    stmt = insert(User).values({'username': 'User-6', 'password': 'password-6'})
-    result = await db.execute(stmt)
-
-    # delete
-    stmt = delete(User).where(User.id == 6)
-    result = await db.execute(stmt)
-
-    # scalar
-    user = await db.scalar(select(User).where(User.id == 1))
-
-    # scalars_all
-    stmt = select(User)
-    result = await db.scalars_all(stmt)
-
-    # get
-    user = await db.get(User, 1)
-
-    # delete
-    user = User(id=1, name='test')
-    await db.delete(user)
-    
-    # save(insert or update)
-    user = User(name='new_user')
-    await db.save(user)
-    
-    # run_sync
-    await db.run_sync(Base.metadata.create_all, is_session=False)
-
-    # session_maker
-    async with db.session_maker() as session:
-        user = await session.get(User, 1)
 ```
 
 ## Database
@@ -151,55 +100,6 @@ db = Database.create('sqlite:///amisadmin.db?check_same_thread=False')  # sqlite
 # db = Database.create('mssql+pyodbc://scott:tiger@mydsn') # SQL Server
 ```
 
-### Shortcut functions
-
-```python
-from sqlalchemy import insert, select, update, delete
-
-
-def fast_execute():
-    # update
-    stmt = update(User).where(User.id == 1).values({'username': 'new_user'})
-    result = db.execute(stmt)
-
-    # select
-    stmt = select(User).where(User.id == 1)
-    user = db.execute(stmt, on_close_pre=lambda r: r.scalar())
-
-    # insert
-    stmt = insert(User).values({'username': 'User-6', 'password': 'password-6'})
-    result = db.execute(stmt)
-
-    # delete
-    stmt = delete(User).where(User.id == 6)
-    result = db.execute(stmt)
-
-    # scalar
-    user = db.scalar(select(User).where(User.id == 1))
-
-    # scalars_all
-    stmt = select(User)
-    result = db.scalars_all(stmt)
-
-    # get
-    user = db.get(User, 1)
-
-    # delete
-    user = User(id=1, name='test')
-    db.delete(user)
-    
-    # save(insert or update)
-    user = User(name='new_user')
-    db.save(user)
-    
-    # run_sync
-    db.run_sync(Base.metadata.create_all, is_session=False)
-
-    # session_maker
-    with db.session_maker() as session:
-        user = session.get(User, 1)
-```
-
 ## AbcAsyncDatabase
 
 When you are developing a library of tools, your Python program may require a database connection.
@@ -211,7 +111,7 @@ You can use asynchronous shortcut functions with the `async_` prefix.
 `AsyncDatabase` and `Database` both inherit from `AbcAsyncDatabase` and both implement the usual `async_` prefixed asynchronous
 shortcut functions.
 
-For example: `async_execute`,`async_scalar`,`async_scalars_all`,`async_get`,`async_delete`,`async_run_sync`.
+For example: `async_execute`,`async_scalar`,`async_scalars`,`async_get`,`async_delete`,`async_run_sync`.
 
 Remark: The `async_` prefix in `Database` is implemented by executing the corresponding synchronous shortcut in the thread pool.
 
@@ -242,9 +142,9 @@ async def fast_execute(db: Union[AsyncDatabase, Database]):
     # scalar
     user = await db.async_scalar(select(User).where(User.id == 1))
 
-    # scalars_all
+    # scalars
     stmt = select(User)
-    result = await db.async_scalars_all(stmt)
+    result = await db.async_scalars(stmt)
 
     # get
     user = await db.async_get(User, 1)
@@ -252,11 +152,7 @@ async def fast_execute(db: Union[AsyncDatabase, Database]):
     # delete
     user = User(id=1, name='test')
     await db.async_delete(user)
-    
-    # save(insert or update)
-    user = User(name='new_user')
-    await db.async_save(user)
-    
+
     # run_sync
     await db.async_run_sync(Base.metadata.create_all, is_session=False)
 
@@ -278,6 +174,52 @@ async def get_user(id: int, session: AsyncSession = Depends(db.session_generator
 @app.get("/user/{id}")
 def get_user(id: int, session: Session = Depends(db.session_generator)):
     return session.get(User, id)
+```
+
+## Use middleware in FastAPI
+
+```python
+app = FastAPI()
+
+# Database
+sync_db = Database.create("sqlite:///amisadmin.db?check_same_thread=False")
+
+app.add_middleware(BaseHTTPMiddleware, dispatch=sync_db.asgi_dispatch)
+
+
+@app.get("/user/{id}")
+def get_user(id: int):
+    return sync_db.session.get(User, id)
+
+
+# AsyncDatabase
+async_db = AsyncDatabase.create("sqlite+aiosqlite:///amisadmin.db?check_same_thread=False")
+
+app.add_middleware(BaseHTTPMiddleware, dispatch=async_db.asgi_dispatch)
+
+
+@app.get("/user/{id}")
+async def get_user(id: int):
+    return await async_db.session.get(User, id)
+
+```
+
+## Get session object
+
+You can get the session object anywhere, but you need to manage the lifecycle of the session yourself. For example:
+
+- 1.In FastAPI, you can use middleware or dependencies to get the session object. In the routing function, the method called will
+  automatically get the session object in the context.
+
+- 2.In the local work unit, you can use the `with` statement to get the session object. In the `with` statement, the method called
+  will automatically get a new session object.
+
+```mermaid
+graph LR
+session[Get session] --> scopefunc{Read context var}
+scopefunc -->|None| gSession[Return the global default session]
+scopefunc -->|Not a Session object| sSession[Return the scoped session corresponding to the current context variable]
+scopefunc -->|Is a Session object| cSession[Return session in the current context variable]
 ```
 
 ## More tutorial documentation

@@ -3,6 +3,8 @@ import asyncio
 import functools
 from typing import Callable, TypeVar
 
+from sqlalchemy.orm import scoped_session
+
 try:
     from asyncio import to_thread  # python 3.9+
 except ImportError:
@@ -22,9 +24,49 @@ except ImportError:
 
 class AbcAsyncDatabase(metaclass=abc.ABCMeta):  # noqa: B024
     def __init__(self) -> None:
-        for func_name in ["execute", "scalar", "scalars_all", "get", "delete", "save", "run_sync", "refresh"]:
-            func = getattr(self, func_name)
-            if not asyncio.iscoroutinefunction(func):
+        for func_name in {
+            "run_sync",
+            "begin",
+            "begin_nested",
+            "close",
+            "commit",
+            "connection",
+            "delete",
+            "execute",
+            "flush",
+            "get",
+            "merge",
+            "refresh",
+            "rollback",
+            "scalar",
+            "scalars",
+            "add",
+            "add_all",
+            "expire",
+            "expire_all",
+            "expunge",
+            "expunge_all",
+            "get_bind",
+            "is_modified",
+        }:
+            func = getattr(self, func_name, None)
+            if not func:
+                func = getattr(self.scoped_session, func_name)  # type: ignore
+                setattr(self, func_name, func)
+                """Create a proxy method for the scoped_session method.Note that this method is not recommended,
+                because it will cause the type of db.session to be unclear, which is not conducive to the code prompt of IDE."""
+            if func_name in {
+                "add",
+                "add_all",
+                "expire",
+                "expire_all",
+                "expunge",
+                "expunge_all",
+                "get_bind",
+                "is_modified",
+            }:  # These methods do not need to be asynchronous.
+                continue
+            if not asyncio.iscoroutinefunction(func) and isinstance(self.scoped_session, scoped_session):  # type: ignore
                 func = functools.partial(to_thread, func)
             setattr(self, f"async_{func_name}", func)
 
@@ -40,7 +82,7 @@ class AbcAsyncDatabase(metaclass=abc.ABCMeta):  # noqa: B024
             app.add_middleware(BaseHTTPMiddleware, dispatch=db.asgi_dispatch)
             ```
         """
-        if self.session is None:  # bind session to request
-            async with self.__call__():
-                return await call_next(request)
-        return await call_next(request)
+        print("asgi_dispatch", id(request.scope))
+        # bind session to request
+        async with self.__call__(scope=id(request.scope)):
+            return await call_next(request)

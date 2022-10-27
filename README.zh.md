@@ -66,9 +66,9 @@ from sqlmodel import SQLModel, Field
 
 class User(SQLModel, table=True):
     id: int = Field(default=None, primary_key=True, nullable=False)
-    username: str = Field(title='username', sa_column=Column(String(100), unique=True, index=True, nullable=False))
+    username: str = Field(title='username', max_length=30, unique=True, index=True, nullable=False)
     password: str = Field(default='', title='Password')
-    create_time: datetime = Field(default_factory=datetime.utcnow, title='Create Time')
+    create_time: datetime = Field(default_factory=datetime.now, title='Create Time')
 ```
 
 ## AsyncDatabase
@@ -83,55 +83,6 @@ db = AsyncDatabase.create('sqlite+aiosqlite:///amisadmin.db?check_same_thread=Fa
 # db = AsyncDatabase.create('mysql+aiomysql://root:123456@127.0.0.1:3306/amisadmin?charset=utf8mb4')# mysql
 # db = AsyncDatabase.create('postgresql+asyncpg://postgres:root@127.0.0.1:5432/amisadmin')# postgresql
 
-```
-
-### 快捷函数
-
-```python
-from sqlalchemy import insert, select, update, delete
-
-
-async def fast_execute():
-    # update
-    stmt = update(User).where(User.id == 1).values({'username': 'new_user'})
-    result = await db.execute(stmt)
-
-    # select
-    stmt = select(User).where(User.id == 1)
-    user = await db.execute(stmt, on_close_pre=lambda r: r.scalar())
-
-    # insert
-    stmt = insert(User).values({'username': 'User-6', 'password': 'password-6'})
-    result = await db.execute(stmt)
-
-    # delete
-    stmt = delete(User).where(User.id == 6)
-    result = await db.execute(stmt)
-
-    # scalar
-    user = await db.scalar(select(User).where(User.id == 1))
-
-    # scalars_all
-    stmt = select(User)
-    result = await db.scalars_all(stmt)
-
-    # get
-    user = await db.get(User, 1)
-
-    # delete
-    user = User(id=1, name='test')
-    await db.delete(user)
-
-    # save(insert or update)
-    user = User(name='new_user')
-    await db.save(user)
-
-    # run_sync
-    await db.run_sync(Base.metadata.create_all, is_session=False)
-
-    # session_maker
-    async with db.session_maker() as session:
-        user = await session.get(User, 1)
 ```
 
 ## Database
@@ -149,54 +100,7 @@ db = Database.create('sqlite:///amisadmin.db?check_same_thread=False')  # sqlite
 # db = Database.create('mssql+pyodbc://scott:tiger@mydsn') # SQL Server
 ```
 
-### 快捷函数
-
-```python
-from sqlalchemy import insert, select, update, delete
-
-
-def fast_execute():
-    # update
-    stmt = update(User).where(User.id == 1).values({'username': 'new_user'})
-    result = db.execute(stmt)
-
-    # select
-    stmt = select(User).where(User.id == 1)
-    user = db.execute(stmt, on_close_pre=lambda r: r.scalar())
-
-    # insert
-    stmt = insert(User).values({'username': 'User-6', 'password': 'password-6'})
-    result = db.execute(stmt)
-
-    # delete
-    stmt = delete(User).where(User.id == 6)
-    result = db.execute(stmt)
-
-    # scalar
-    user = db.scalar(select(User).where(User.id == 1))
-
-    # scalars_all
-    stmt = select(User)
-    result = db.scalars_all(stmt)
-
-    # get
-    user = db.get(User, 1)
-
-    # delete
-    user = User(id=1, name='test')
-    db.delete(user)
-
-    # save(insert or update)
-    user = User(name='new_user')
-    db.save(user)
-
-    # run_sync
-    db.run_sync(Base.metadata.create_all, is_session=False)
-
-    # session_maker
-    with db.session_maker() as session:
-        user = session.get(User, 1)
-```
+###  
 
 ## AbcAsyncDatabase
 
@@ -206,7 +110,7 @@ def fast_execute():
 
 `AsyncDatabase`和`Database`都继承自`AbcAsyncDatabase`,并且都实现了常用的以`async_`为前缀的异步快捷函数.
 
-例如: `async_execute`,`async_scalar`,`async_scalars_all`,`async_get`,`async_delete`,`async_run_sync`.
+例如: `async_execute`,`async_scalar`,`async_scalars`,`async_get`,`async_delete`,`async_run_sync`.
 
 说明: `Database`中`async_`前缀异步快捷函数,是通过在线程池中执行对应的同步快捷函数实现的.
 
@@ -237,9 +141,9 @@ async def fast_execute(db: Union[AsyncDatabase, Database]):
     # scalar
     user = await db.async_scalar(select(User).where(User.id == 1))
 
-    # scalars_all
+    # scalars
     stmt = select(User)
-    result = await db.async_scalars_all(stmt)
+    result = await db.async_scalars(stmt)
 
     # get
     user = await db.async_get(User, 1)
@@ -247,10 +151,6 @@ async def fast_execute(db: Union[AsyncDatabase, Database]):
     # delete
     user = User(id=1, name='test')
     await db.async_delete(user)
-
-    # save(insert or update)
-    user = User(name='new_user')
-    await db.async_save(user)
 
     # run_sync
     await db.async_run_sync(Base.metadata.create_all, is_session=False)
@@ -301,6 +201,22 @@ app.add_middleware(BaseHTTPMiddleware, dispatch=async_db.asgi_dispatch)
 async def get_user(id: int):
     return await async_db.session.get(User, id)
 
+```
+
+## 获取session对象
+
+你可以在任何地方获取session对象,但是你需要自己管理session的生命周期.例如: 
+
+- 1.在FastAPI中,你可以使用中间件,或者依赖来获取session对象.在路由函数中,调用的方法将自动获取上下文中的session对象.
+
+- 2.在局部工作单元中,你可以使用`with`语句来获取session对象.在`with`语句中,调用的方法将自动获取一个新的session对象.
+
+```mermaid
+graph LR
+session[Get session] --> scopefunc{Read context var}
+scopefunc -->|None| gSession[Return the global default session]
+scopefunc -->|Not a Session object| sSession[Return the scoped session corresponding to the current context variable]
+scopefunc -->|Is a Session object| cSession[Return session in the current context variable]
 ```
 
 ## 更多教程文档

@@ -1,13 +1,16 @@
 import datetime
+from typing import AsyncGenerator, List, Union
 
+import pytest
 import sqlalchemy as sa
+from sqlalchemy import insert
 from sqlalchemy.orm import declarative_base
 
 from sqlalchemy_database import AsyncDatabase, Database
 
 # sqlite
-sync_db = Database.create("sqlite:///amisadmin.db?check_same_thread=False")
-async_db = AsyncDatabase.create("sqlite+aiosqlite:///amisadmin.db?check_same_thread=False")
+sync_db = Database.create("sqlite:///amisadmin.db?check_same_thread=False", echo=True)
+async_db = AsyncDatabase.create("sqlite+aiosqlite:///amisadmin.db?check_same_thread=False", echo=True)
 
 # mysql
 # sync_db = Database.create('mysql+pymysql://root:123456@127.0.0.1:3306/amisadmin?charset=utf8mb4')
@@ -43,3 +46,50 @@ class Group(Base):
     name = sa.Column(sa.String(30), unique=True, index=True, nullable=False)
     create_time = sa.Column(sa.DateTime, default=datetime.datetime.utcnow)
     users = sa.orm.relationship("User", back_populates="group", lazy="dynamic")
+
+
+@pytest.fixture
+async def prepare_database() -> AsyncGenerator[None, None]:
+    _db = AsyncDatabase.create(async_db.engine.url)
+
+    await _db.async_run_sync(Base.metadata.drop_all, is_session=False)
+    await _db.async_run_sync(Base.metadata.create_all, is_session=False)
+    yield
+    await _db.async_close()
+    await _db.async_run_sync(Base.metadata.drop_all, is_session=False)
+
+
+@pytest.fixture
+async def fake_users(prepare_database) -> List[dict]:
+    data = [
+        {
+            "id": i,
+            "username": f"User-{i}",
+            "password": f"password_{i}",
+            "create_time": datetime.datetime.strptime(f"2022-01-0{i} 00:00:00", "%Y-%m-%d %H:%M:%S"),
+        }
+        for i in range(1, 6)
+    ]
+    await async_db.session.execute(insert(User).values(data))
+    await async_db.session.commit()
+    return data
+
+
+@pytest.fixture(params=[async_db, sync_db])
+async def db(request, fake_users) -> Union[Database, AsyncDatabase]:
+    database = request.param
+    yield database
+    await database.async_close()
+
+
+@pytest.fixture(autouse=True)
+def _setup_sync_db(fake_users) -> Database:
+    yield sync_db
+    # Free connection pool resources
+    sync_db.close()  # type: ignore
+
+
+@pytest.fixture(autouse=True)
+async def _setup_async_db(fake_users) -> AsyncDatabase:
+    yield async_db
+    await async_db.async_close()  # Free connection pool resources
