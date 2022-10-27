@@ -23,6 +23,16 @@ except ImportError:
 
 
 class AbcAsyncDatabase(metaclass=abc.ABCMeta):  # noqa: B024
+    def __new__(cls, engine, *args, **kwargs):
+        """Create a new instance of the database class.Each engine url corresponds to a database instance,
+        and if it already exists, it is directly returned, otherwise a new instance is created.
+        """
+        if not hasattr(cls, "_instances"):
+            cls._instances = {}
+        if engine.url not in cls._instances:
+            cls._instances[engine.url] = super().__new__(cls)
+        return cls._instances[engine.url]
+
     def __init__(self) -> None:
         for func_name in {
             "run_sync",
@@ -82,7 +92,6 @@ class AbcAsyncDatabase(metaclass=abc.ABCMeta):  # noqa: B024
             app.add_middleware(BaseHTTPMiddleware, dispatch=db.asgi_dispatch)
             ```
         """
-        print("asgi_dispatch", id(request.scope))
         # bind session to request
         async with self.__call__(scope=id(request.scope)):
             return await call_next(request)
