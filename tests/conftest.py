@@ -9,8 +9,8 @@ from sqlalchemy.orm import declarative_base
 from sqlalchemy_database import AsyncDatabase, Database
 
 # sqlite
-sync_db = Database.create("sqlite:///amisadmin.db?check_same_thread=False", echo=True)
-async_db = AsyncDatabase.create("sqlite+aiosqlite:///amisadmin.db?check_same_thread=False", echo=True)
+sync_db = Database.create("sqlite:///amisadmin.db?check_same_thread=False")
+async_db = AsyncDatabase.create("sqlite+aiosqlite:///amisadmin.db?check_same_thread=False")
 
 # mysql
 # sync_db = Database.create('mysql+pymysql://root:123456@127.0.0.1:3306/amisadmin?charset=utf8mb4')
@@ -50,13 +50,10 @@ class Group(Base):
 
 @pytest.fixture
 async def prepare_database() -> AsyncGenerator[None, None]:
-    _db = AsyncDatabase.create(async_db.engine.url)
-
-    await _db.async_run_sync(Base.metadata.drop_all, is_session=False)
-    await _db.async_run_sync(Base.metadata.create_all, is_session=False)
+    await async_db.async_run_sync(Base.metadata.create_all, is_session=False)
     yield
-    await _db.async_close()
-    await _db.async_run_sync(Base.metadata.drop_all, is_session=False)
+    await async_db.async_run_sync(Base.metadata.drop_all, is_session=False)
+    await async_db.async_close()
 
 
 @pytest.fixture

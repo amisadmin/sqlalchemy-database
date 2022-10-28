@@ -119,7 +119,6 @@ def test_ThreadPoolExecutor():
     task_count = 40
     pool = ThreadPoolExecutor(max_workers=20)  # 创建线程池,设置最大线程数
     all_task = [pool.submit(test_session_context_var, k) for k in range(task_count)]  # 投递任务
-    # print(all_task)
     done, fail = wait(all_task, return_when=ALL_COMPLETED)  # 等待线程运行完毕
     results = {task.result() for task in done}
     assert len(results) == task_count

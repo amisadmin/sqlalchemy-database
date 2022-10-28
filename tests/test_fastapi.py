@@ -13,7 +13,6 @@ global_sync_session = sync_db.session  # Default global session
 
 
 def get_users() -> List[User]:
-    print("get_users", id(sync_db.session))
     assert sync_db.session is not global_sync_session
     users = sync_db.session.scalars(select(User))
     """1. If the session is used in a non-dependency function, the session is global.
