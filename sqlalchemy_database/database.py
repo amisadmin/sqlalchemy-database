@@ -145,8 +145,10 @@ class AsyncDatabase(AbcAsyncDatabase):
             yield self.session
         else:
             """If the current context has no session, create a new session."""
-            async with self() as session:
+            async with self.session_maker() as session:
                 yield session
+                if self.commit_on_exit:
+                    await session.commit()
 
     async def run_sync(
         self,
@@ -226,8 +228,10 @@ class Database(AbcAsyncDatabase):
             yield self.session
         else:
             """If the current context has no session, create a new session."""
-            with self() as session:
+            with self.session_maker() as session:
                 yield session
+                if self.commit_on_exit:
+                    session.commit()
 
     def run_sync(
         self,
