@@ -92,6 +92,9 @@ class AbcAsyncDatabase(metaclass=abc.ABCMeta):  # noqa: B024
             app.add_middleware(BaseHTTPMiddleware, dispatch=db.asgi_dispatch)
             ```
         """
+        if request.scope.get("__sqlalchemy_database__", False):
+            return await call_next(request)
         # bind session to request
         async with self.__call__(scope=id(request.scope)):
+            request.scope["__sqlalchemy_database__"] = self
             return await call_next(request)
