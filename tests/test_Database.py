@@ -84,7 +84,9 @@ lock = threading.Lock()
 
 def test_session_context_var(i=1):
     global_session = sync_db.session  # Default global session
+    assert not sync_db.scoped
     with sync_db() as session:  # Enter a new session
+        assert sync_db.scoped
         user = session.get(User, 1)
         assert user.id == 1
         assert session is sync_db.session

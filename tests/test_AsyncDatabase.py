@@ -98,8 +98,9 @@ def lock(event_loop: AbstractEventLoop):
 
 async def test_async_session_context_var(lock, i=1):
     global_session = async_db.session  # Default global session
-
+    assert not async_db.scoped
     async with async_db() as session:  # Enter a new session
+        assert async_db.scoped
         user = await session.get(User, 1)
         assert user.id == 1
         assert session is async_db.session

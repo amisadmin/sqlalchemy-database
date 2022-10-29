@@ -107,6 +107,13 @@ class AsyncDatabase(AbcAsyncDatabase):
         """
         return self.scoped_session()
 
+    @property
+    def scoped(self) -> bool:
+        """Whether the current context has a session. If False, the session is the default global session,
+        and the transaction needs to be manually submitted.
+        """
+        return bool(self._session_scope.get())
+
     def __call__(self, scope: Any = None):
         return AsyncSessionContextVarManager(self, scope=scope)
 
@@ -140,7 +147,7 @@ class AsyncDatabase(AbcAsyncDatabase):
                 return await session.get(User,id)
             ```
         """
-        if self._session_scope.get():
+        if self.scoped:
             """If the current context has a session, return it."""
             yield self.session
         else:
@@ -210,6 +217,10 @@ class Database(AbcAsyncDatabase):
     def session(self) -> Session:
         return self.scoped_session()
 
+    @property
+    def scoped(self) -> bool:
+        return bool(self._session_scope.get())
+
     def __call__(self, scope: Any = None):
         return SessionContextVarManager(self, scope=scope)
 
@@ -223,7 +234,7 @@ class Database(AbcAsyncDatabase):
         return cls(engine, **session_options)
 
     def session_generator(self) -> Generator[Session, Any, None]:
-        if self._session_scope.get():
+        if self.scoped:
             """If the current context has a session, return it."""
             yield self.session
         else:
