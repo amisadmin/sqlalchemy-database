@@ -7,7 +7,6 @@ from typing import (
     Generator,
     Mapping,
     Optional,
-    Sequence,
     TypeVar,
     Union,
 )
@@ -29,14 +28,11 @@ except ImportError:
     from sqlalchemy.orm import Session
     from sqlalchemy.ext.asyncio import AsyncSession
 
-from sqlalchemy_database._abc_async_database import AbcAsyncDatabase
+from sqlalchemy_database._abc_async_database import AbcAsyncDatabase, to_thread
 
 _P = ParamSpec("_P")
 _T = TypeVar("_T")
 _R = TypeVar("_R")
-
-_ExecuteParams = Union[Mapping[Any, Any], Sequence[Mapping[Any, Any]]]
-_ExecuteOptions = Mapping[Any, Any]
 
 
 class AsyncDatabase(AbcAsyncDatabase):
@@ -258,7 +254,13 @@ class Database(AbcAsyncDatabase):
 
     def asyncify(self, db: Union[AsyncSession, AsyncDatabase], fn: Callable[_P, _T]) -> Callable[_P, Awaitable[_T]]:
         """Convert the given sync function that runs in the context of a sync session to
-        an async function that runs in the context of an async session."""
+        an async function that runs in the context of an async session.
+        Args:
+            db: Async database client or session
+            fn: sync function
+        Returns:
+            Returns the async function.
+        """
         session = db if isinstance(db, AsyncSession) else db.session
 
         @functools.wraps(fn)
@@ -301,23 +303,29 @@ class SessionContextVarManager:
             self._token = self.db._session_scope.set(self._scope)
         return self.db.session
 
+    def _close_session(self, session: Session, exc_type):
+        if exc_type is not None:
+            session.rollback()
+        elif self.db.commit_on_exit:
+            session.commit()
+        session.close()
+
     def __exit__(self, exc_type, exc_value, traceback):
-        if isinstance(self._scope, self._SessionCls):
+        if not (self._scope and isinstance(self._scope, self._SessionCls)):
             """If the scope is a session, it will not be closed."""
-            self.db.scoped_session.registry.clear()
-        else:
-            if exc_type is not None:
-                self.db.session.rollback()
-            elif self.db.commit_on_exit:
-                self.db.session.commit()
-            self.db.scoped_session.remove()
+            self._close_session(self.db.session, exc_type)
+        self.db.scoped_session.registry.clear()
         self.db._session_scope.reset(self._token)
 
     async def __aenter__(self):
         return self.__enter__()
 
     async def __aexit__(self, exc_type, exc_value, traceback):
-        self.__exit__(exc_type, exc_value, traceback)
+        if not (self._scope and isinstance(self._scope, self._SessionCls)):
+            """If the scope is a session, it will not be closed."""
+            await to_thread(self._close_session, self.db.session, exc_type)
+        self.db.scoped_session.registry.clear()
+        self.db._session_scope.reset(self._token)
 
 
 class AsyncSessionContextVarManager(SessionContextVarManager):
@@ -331,13 +339,13 @@ class AsyncSessionContextVarManager(SessionContextVarManager):
 
     async def __aexit__(self, exc_type, exc_value, traceback):
         self.db: AsyncDatabase
-        if isinstance(self._scope, AsyncSession):
+        if not (self._scope and isinstance(self._scope, self._SessionCls)):
             """If the scope is a session, it will not be closed."""
-            self.db.scoped_session.registry.clear()
-        else:
+            session = self.db.session
             if exc_type is not None:
-                await self.db.session.rollback()
+                await session.rollback()
             elif self.db.commit_on_exit:
-                await self.db.session.commit()
-            await self.db.scoped_session.remove()
+                await session.commit()
+            await session.close()
+        self.db.scoped_session.registry.clear()
         self.db._session_scope.reset(self._token)
