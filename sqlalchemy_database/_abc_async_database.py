@@ -1,8 +1,10 @@
 import abc
 import asyncio
 import functools
-from typing import Callable, TypeVar
+from typing import Callable, Dict, TypeVar, Union
 
+from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlalchemy.future import Engine
 from sqlalchemy.orm import scoped_session
 
 try:
@@ -23,17 +25,19 @@ except ImportError:
 
 
 class AbcAsyncDatabase(metaclass=abc.ABCMeta):  # noqa: B024
-    def __new__(cls, engine, *args, **kwargs):
+
+    _instances: Dict[str, "AbcAsyncDatabase"] = None
+
+    def __new__(cls, engine: Union[Engine, AsyncEngine], *args, **kwargs):
         """Create a new instance of the database class.Each engine url corresponds to a database instance,
         and if it already exists, it is directly returned, otherwise a new instance is created.
         """
-        if not hasattr(cls, "_instances"):
-            cls._instances = {}
+        cls._instances = cls._instances or {}
         if engine.url not in cls._instances:
             cls._instances[engine.url] = super().__new__(cls)
         return cls._instances[engine.url]
 
-    def __init__(self) -> None:
+    def __init__(self, engine: Union[Engine, AsyncEngine], *args, **kwargs) -> None:
         for func_name in {
             "run_sync",
             "begin",
@@ -98,3 +102,16 @@ class AbcAsyncDatabase(metaclass=abc.ABCMeta):  # noqa: B024
         async with self.__call__(scope=id(request.scope)):
             request.scope[f"__sqlalchemy_database__:{id(self)}"] = self
             return await call_next(request)
+
+    def attach_middleware(self, app):
+        """Attach the middleware to the ASGI application.
+        Example:
+            ```Python
+            app = FastAPI()
+            db = Database.create("sqlite:///test.db")
+            db.attach_middlewares(app)
+            ```
+        """
+        from starlette.middleware.base import BaseHTTPMiddleware
+
+        app.add_middleware(BaseHTTPMiddleware, dispatch=self.asgi_dispatch)

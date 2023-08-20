@@ -5,6 +5,7 @@ from contextlib import contextmanager
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from sqlalchemy_database import Database
 from tests.conftest import Group, User, sync_db
 
 
@@ -124,3 +125,9 @@ def test_ThreadPoolExecutor():
     done, fail = wait(all_task, return_when=ALL_COMPLETED)  # 等待线程运行完毕
     results = {task.result() for task in done}
     assert len(results) == task_count
+
+
+def test_create():
+    sync_db1 = Database.create("sqlite:///amisadmin.db?check_same_thread=False")
+    sync_db2 = Database.create("sqlite:///amisadmin.db?check_same_thread=False")
+    assert sync_db2 is sync_db1

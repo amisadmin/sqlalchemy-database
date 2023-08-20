@@ -11,7 +11,7 @@ from typing import (
     Union,
 )
 
-from sqlalchemy.engine import Connection, Result
+from sqlalchemy.engine import Connection, Engine, Result
 from sqlalchemy.sql import ClauseElement, Executable
 from sqlmodel.engine.result import ScalarResult
 from typing_extensions import Concatenate, ParamSpec
@@ -22,18 +22,22 @@ try:
     from sqlmodel import Session
     from sqlmodel.ext.asyncio.session import AsyncSession
 except ImportError:
-    from sqlalchemy.ext.asyncio import AsyncSession
+    from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
     from sqlalchemy.orm import Session
 
 _P = ParamSpec("_P")
 _T = TypeVar("_T")
 _R = TypeVar("_R")
 
+async def to_thread(func: Callable[_P, _R], *args: _P.args, **kwargs: _P.kwargs) -> _R: ...
+
 _ExecuteParams = Union[Mapping[Any, Any], Sequence[Mapping[Any, Any]]]
 _ExecuteOptions = Mapping[Any, Any]
 
 class AbcAsyncDatabase(metaclass=abc.ABCMeta):
     """`sqlalchemy` asynchronous database abstract base class, not directly instantiated"""
+
+    engine: Union[Engine, AsyncEngine]
 
     async def async_run_sync(
         self,

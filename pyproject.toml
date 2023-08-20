@@ -37,7 +37,6 @@ classifiers = [
 ]
 dependencies = [
     "sqlalchemy",
-    "sqlalchemy2-stubs>=0.0.2a29"
 ]
 
 [project.urls]

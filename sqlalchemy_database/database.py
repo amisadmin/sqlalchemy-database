@@ -11,7 +11,7 @@ from typing import (
     Union,
 )
 
-from sqlalchemy.engine import Connection
+from sqlalchemy.engine import URL, Connection
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     async_scoped_session,
@@ -51,7 +51,6 @@ class AsyncDatabase(AbcAsyncDatabase):
             commit_on_exit: Whether to commit the session when the context manager or session generator exits.
             **session_options: The default `session` initialization parameters
         """
-
         self.engine: AsyncEngine = engine
         """`sqlalchemy` Asynchronous Engine
 
@@ -78,7 +77,7 @@ class AsyncDatabase(AbcAsyncDatabase):
             f"_session_context_var_{id(self)}", default=None
         )
         self.scoped_session: async_scoped_session = async_scoped_session(self.session_maker, scopefunc=self._session_scope.get)
-        super().__init__()
+        super().__init__(engine)
 
     @property
     def session(self) -> AsyncSession:
@@ -115,7 +114,7 @@ class AsyncDatabase(AbcAsyncDatabase):
 
     @classmethod
     def create(
-        cls, url: str, *, commit_on_exit: bool = True, session_options: Mapping[str, Any] = None, **kwargs
+        cls, url: Union[str, URL], *, commit_on_exit: bool = True, session_options: Mapping[str, Any] = None, **kwargs
     ) -> "AsyncDatabase":
         """
         Initialize the client with a database connection string
@@ -207,7 +206,7 @@ class Database(AbcAsyncDatabase):
         self._session_scope: ContextVar[Union[str, Session, None]] = ContextVar(f"_session_context_var_{id(self)}", default=None)
         self.scoped_session: scoped_session = scoped_session(self.session_maker, scopefunc=self._session_scope.get)
         """Returns the Session local instance for the current context or current thread."""
-        super().__init__()
+        super().__init__(engine)
 
     @property
     def session(self) -> Session:
@@ -222,7 +221,7 @@ class Database(AbcAsyncDatabase):
 
     @classmethod
     def create(
-        cls, url: str, *, commit_on_exit: bool = True, session_options: Optional[Mapping[str, Any]] = None, **kwargs
+        cls, url: Union[str, URL], *, commit_on_exit: bool = True, session_options: Optional[Mapping[str, Any]] = None, **kwargs
     ) -> "Database":
         kwargs.setdefault("future", True)
         engine = create_engine(url, **kwargs)
