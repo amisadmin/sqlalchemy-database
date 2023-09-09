@@ -184,7 +184,7 @@ app = FastAPI()
 # Database
 sync_db = Database.create("sqlite:///amisadmin.db?check_same_thread=False")
 
-app.add_middleware(BaseHTTPMiddleware, dispatch=sync_db.asgi_dispatch)
+app.add_middleware(sync_db.asgi_middleware)
 
 
 @app.get("/user/{id}")
@@ -195,7 +195,7 @@ def get_user(id: int):
 # AsyncDatabase
 async_db = AsyncDatabase.create("sqlite+aiosqlite:///amisadmin.db?check_same_thread=False")
 
-app.add_middleware(BaseHTTPMiddleware, dispatch=async_db.asgi_dispatch)
+app.add_middleware(async_db.asgi_middleware)
 
 
 @app.get("/user/{id}")

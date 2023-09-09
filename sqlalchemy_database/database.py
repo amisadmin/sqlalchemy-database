@@ -88,7 +88,7 @@ class AsyncDatabase(AbcAsyncDatabase):
         Example:
             ```Python
             app = FastAPI()
-            app.add_middleware(BaseHTTPMiddleware, dispatch=db.asgi_dispatch)
+            app.add_middleware(db.asgi_middleware)
 
             @app.get('/get_user')
             async def get_user(id:int):

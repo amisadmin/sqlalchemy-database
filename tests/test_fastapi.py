@@ -4,7 +4,6 @@ from fastapi import Depends, FastAPI
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
-from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.testclient import TestClient
 
 from tests.conftest import User, async_db, sync_db
@@ -26,7 +25,7 @@ def test_sync_db_in_fastapi():
     app = FastAPI()
     sub_app = FastAPI()
     app.mount("/sub", sub_app)
-    app.add_middleware(BaseHTTPMiddleware, dispatch=sync_db.asgi_dispatch)
+    app.add_middleware(sync_db.asgi_middleware)
     client = TestClient(app)
 
     @app.get("/users")
