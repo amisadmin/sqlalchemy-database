@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url>
+         <loc>https://docs.amis.work/</loc>
+         <lastmod>2023-09-09</lastmod>
+         <changefreq>daily</changefreq>
+    </url>
+    <url>
+         <loc>https://docs.amis.work/mkdocstring/</loc>
+         <lastmod>2023-09-09</lastmod>
+         <changefreq>daily</changefreq>
+    </url>
+    <url>
+         <loc>https://docs.amis.work/Reference/AbcAsyncDatabase/</loc>
+         <lastmod>2023-09-09</lastmod>
+         <changefreq>daily</changefreq>
+    </url>
+    <url>
+         <loc>https://docs.amis.work/Reference/AsyncDatabase/</loc>
+         <lastmod>2023-09-09</lastmod>
+         <changefreq>daily</changefreq>
+    </url>
+    <url>
+         <loc>https://docs.amis.work/Reference/Database/</loc>
+         <lastmod>2023-09-09</lastmod>
+         <changefreq>daily</changefreq>
+    </url>
+</urlset>
