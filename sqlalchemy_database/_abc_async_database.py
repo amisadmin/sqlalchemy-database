@@ -1,6 +1,7 @@
 import abc
 import asyncio
 import functools
+import warnings
 from typing import Callable, Dict, TypeVar, Union
 
 from sqlalchemy.ext.asyncio import AsyncEngine
@@ -85,17 +86,15 @@ class AbcAsyncDatabase(metaclass=abc.ABCMeta):  # noqa: B024
             setattr(self, f"async_{func_name}", func)
 
     async def asgi_dispatch(self, request, call_next):
-        """Middleware for ASGI applications, such as: Starlette, FastAPI, Quart, Sanic, Hug, Responder, etc.
-        Bind a SQLAlchemy session connection to the incoming HTTP request session context,
-        you can access the session object through `self.session`.
-        The instance shortcut method will also try to use this `session` object by default.
-        Example:
-            ```Python
-            app = FastAPI()
-            db = Database.create("sqlite:///test.db")
-            app.add_middleware(BaseHTTPMiddleware, dispatch=db.asgi_dispatch)
-            ```
         """
+        This method has been deprecated and is not recommended. Please use the `asgi_middleware` method instead.
+        Reference: https://www.starlette.io/middleware/#limitations
+        """
+        # 打印警告信息
+        warnings.warn(
+            "This method has been deprecated and is not recommended. Please use the `asgi_middleware` method instead.",
+            DeprecationWarning,
+        )
         if request.scope.get(f"__sqlalchemy_database__:{id(self)}", False):
             return await call_next(request)
         # bind session to request
@@ -112,6 +111,32 @@ class AbcAsyncDatabase(metaclass=abc.ABCMeta):  # noqa: B024
             db.attach_middlewares(app)
             ```
         """
-        from starlette.middleware.base import BaseHTTPMiddleware
+        app.add_middleware(self.asgi_middleware)
 
-        app.add_middleware(BaseHTTPMiddleware, dispatch=self.asgi_dispatch)
+    @property
+    def asgi_middleware(self):
+        """Middleware for ASGI applications, such as: Starlette, FastAPI, Quart, Sanic, Hug, Responder, etc.
+        Bind a SQLAlchemy session connection to the incoming HTTP request session context,
+        you can access the session object through `self.session`.
+        The instance shortcut method will also try to use this `session` object by default.
+        Example:
+            ```Python
+            app = FastAPI()
+            db = Database.create("sqlite:///test.db")
+            app.add_middleware(db.asgi_middleware)
+            ```
+        """
+
+        def asgi_decorator(app):
+            @functools.wraps(app)
+            async def wrapped_app(scope, receive, send):
+                if scope.get(f"__sqlalchemy_database__:{id(self)}", False):
+                    return await app(scope, receive, send)
+                    # bind session to request
+                async with self.__call__(scope=id(scope)):
+                    scope[f"__sqlalchemy_database__:{id(self)}"] = self
+                    await app(scope, receive, send)
+
+            return wrapped_app
+
+        return asgi_decorator

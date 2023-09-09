@@ -6,6 +6,7 @@ from typing import (
     Mapping,
     Optional,
     Sequence,
+    Tuple,
     Type,
     TypeVar,
     Union,
@@ -46,7 +47,8 @@ class AbcAsyncDatabase(metaclass=abc.ABCMeta):
         is_session: bool = True,
         **kwargs: _P.kwargs,
     ) -> _T: ...
-    async def asgi_dispatch(self, request, call_next): ...
+    def asgi_middleware(self, app: Any) -> Callable[[Any], Tuple[Mapping[str, Any], Any, Any]]: ...
+    def attach_middleware(self, app: Any) -> None: ...
     def __call__(self, scope: Any = None) -> AsyncSessionContextVarManager:
         pass
     async def async_close(self) -> None: ...

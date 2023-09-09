@@ -80,7 +80,7 @@ async def test_async_db_in_fastapi():
     app = FastAPI()
     sub_app = FastAPI()
     app.mount("/sub", sub_app)
-    app.add_middleware(BaseHTTPMiddleware, dispatch=async_db.asgi_dispatch)
+    app.add_middleware(async_db.asgi_middleware)
     client = TestClient(app)
 
     @app.get("/users")
