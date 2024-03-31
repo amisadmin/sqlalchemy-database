@@ -1,4 +1,4 @@
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 __url__ = "https://github.com/amisadmin/sqlalchemy_database"
 
 from sqlalchemy_database.database import AbcAsyncDatabase, AsyncDatabase, Database
