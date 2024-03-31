@@ -303,11 +303,13 @@ class SessionContextVarManager:
         return self.db.session
 
     def _close_session(self, session: Session, exc_type):
-        if exc_type is not None:
-            session.rollback()
-        elif self.db.commit_on_exit:
-            session.commit()
-        session.close()
+        try:
+            if exc_type is not None:
+                session.rollback()
+            elif self.db.commit_on_exit:
+                session.commit()
+        finally:
+            session.close()
 
     def __exit__(self, exc_type, exc_value, traceback):
         if not (self._scope and isinstance(self._scope, self._SessionCls)):
@@ -341,10 +343,12 @@ class AsyncSessionContextVarManager(SessionContextVarManager):
         if not (self._scope and isinstance(self._scope, self._SessionCls)):
             """If the scope is a session, it will not be closed."""
             session = self.db.session
-            if exc_type is not None:
-                await session.rollback()
-            elif self.db.commit_on_exit:
-                await session.commit()
-            await session.close()
+            try:
+                if exc_type is not None:
+                    await session.rollback()
+                elif self.db.commit_on_exit:
+                    await session.commit()
+            finally:
+                await session.close()
         self.db.scoped_session.registry.clear()
         self.db._session_scope.reset(self._token)
